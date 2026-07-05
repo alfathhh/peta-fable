@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(100)
+  username    String    @unique @db.VarChar(50)
+  email       String?   @unique @db.VarChar(150)
+  password    String
+  role        String    @db.VarChar(20) // 'admin' | 'petugas'
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  activities      Activity[]
+  tokens          ActivityToken[]
+  claims          ActivityClaim[]
+  projects        Project[]
+  infrastructures Infrastructure[]
+  regionUploads   RegionUpload[]
+
+  @@map("users")
+}
+
+model Region {
+  regionId       String                                        @id @map("region_id") @db.VarChar(16)
+  level          String                                        @db.VarChar(10) // kab|kec|desa|sls|subsls
+  name           String                                        @db.VarChar(150)
+  parentId       String?                                       @map("parent_id") @db.VarChar(16)
+  geom           Unsupported("geometry(MultiPolygon,4326)")?
+  geomSimplified Unsupported("geometry(MultiPolygon,4326)")?   @map("geom_simplified")
+  bbox           Json?
+  properties     Json?
+  sourceVersion  String?                                       @map("source_version") @db.VarChar(50)
+  createdAt      DateTime                                      @default(now()) @map("created_at")
+  updatedAt      DateTime                                      @updatedAt @map("updated_at")
+
+  @@map("regions")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique @db.VarChar(100)
+  icon      String   @db.VarChar(50)
+  color     String   @db.VarChar(7)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  infrastructures Infrastructure[]
+
+  @@map("categories")
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(150)
+  description String?
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  creator         User             @relation(fields: [createdBy], references: [id])
+  tokens          ActivityToken[]
+  claims          ActivityClaim[]
+  projects        Project[]
+  infrastructures Infrastructure[]
+
+  @@map("activities")
+}
+
+model ActivityToken {
+  id          String   @id @default(cuid())
+  activityId  String   @map("activity_id")
+  token       String   @unique @db.Char(7)
+  expiresAt   DateTime @map("expires_at")
+  maxClaims   Int?     @map("max_claims")
+  claimsCount Int      @default(0) @map("claims_count")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  activity Activity        @relation(fields: [activityId], references: [id])
+  creator  User            @relation(fields: [createdBy], references: [id])
+  claims   ActivityClaim[]
+
+  @@map("activity_tokens")
+}
+
+model ActivityClaim {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  activityTokenId String   @map("activity_token_id")
+  activityId      String   @map("activity_id")
+  claimedAt       DateTime @default(now()) @map("claimed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user     User          @relation(fields: [userId], references: [id])
+  token    ActivityToken @relation(fields: [activityTokenId], references: [id])
+  activity Activity      @relation(fields: [activityId], references: [id])
+
+  @@unique([userId, activityTokenId])
+  @@map("activity_claims")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  activityId  String   @map("activity_id")
+  name        String   @db.VarChar(150)
+  regionId    String   @map("region_id") @db.VarChar(16)
+  regionLevel String   @map("region_level") @db.VarChar(10)
+  status      String   @default("aktif") @db.VarChar(20)
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user            User             @relation(fields: [userId], references: [id])
+  activity        Activity         @relation(fields: [activityId], references: [id])
+  layers          ProjectLayer[]
+  infrastructures Infrastructure[]
+
+  @@map("projects")
+}
+
+model ProjectLayer {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  name         String   @db.VarChar(150)
+  geojsonPath  String   @map("geojson_path")
+  featureCount Int      @default(0) @map("feature_count")
+  style        Json
+  isVisible    Boolean  @default(true) @map("is_visible")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_layers")
+}
+
+model Infrastructure {
+  id              String                            @id @default(cuid())
+  name            String                            @db.VarChar(150)
+  categoryId      String                            @map("category_id")
+  description     String?
+  geom            Unsupported("geometry(Point,4326)")?
+  lat             Float
+  lng             Float
+  gpsAccuracyM    Float?                            @map("gps_accuracy_m")
+  photoPath       String?                           @map("photo_path")
+  idkab           String                            @db.VarChar(4)
+  idkec           String?                           @db.VarChar(7)
+  iddesa          String?                           @db.VarChar(10)
+  idsls           String?                           @db.VarChar(14)
+  idsubsls        String?                           @db.VarChar(16)
+  isOutsideRegion Boolean                           @default(false) @map("is_outside_region")
+  approvalStatus  String                            @default("pending") @map("approval_status") @db.VarChar(20) // pending|approved|rejected
+  userId          String                            @map("user_id")
+  projectId       String?                           @map("project_id")
+  activityId      String?                           @map("activity_id")
+  source          String                            @default("manual") @db.VarChar(20)
+  deletedAt       DateTime?                         @map("deleted_at")
+  createdAt       DateTime                          @default(now()) @map("created_at")
+  updatedAt       DateTime                          @updatedAt @map("updated_at")
+
+  category Category  @relation(fields: [categoryId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+  project  Project?  @relation(fields: [projectId], references: [id])
+  activity Activity? @relation(fields: [activityId], references: [id])
+
+  @@index([categoryId])
+  @@index([idkec])
+  @@index([iddesa])
+  @@index([idsls])
+  @@index([userId])
+  @@index([isOutsideRegion])
+  @@index([approvalStatus])
+  @@map("infrastructures")
+}
+
+model RegionUpload {
+  id           String   @id @default(cuid())
+  level        String   @db.VarChar(10)
+  filename     String
+  featureCount Int      @default(0) @map("feature_count")
+  uploadedBy   String   @map("uploaded_by")
+  status       String   @default("processing") @db.VarChar(20)
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  uploader User @relation(fields: [uploadedBy], references: [id])
+
+  @@map("region_uploads")
+}
