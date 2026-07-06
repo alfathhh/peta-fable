@@ -6,7 +6,9 @@ import { compressPhoto } from '../utils/photo';
 import { getCategoryIcon } from '../config/categoryIcons';
 import { Button, Input, Select, Textarea } from './ui';
 import { PhotoEditor } from './PhotoEditor';
+import { MiniMapPicker } from './map/MiniMapPicker';
 import { toast } from '../stores/toastStore';
+import { useAuthStore } from '../stores/authStore';
 import type { Category, InfraDetail, RegionOption } from '../types';
 import type { GpsPosition } from './map/CurrentLocation';
 
@@ -126,6 +128,9 @@ export function InfraForm({
   onSaved: () => void;
 }) {
   const isEdit = !!existing;
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+  // koordinat pada mode edit hanya bisa digeser admin (aturan domain #4)
+  const canMovePin = !isEdit || isAdmin;
   const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState(existing?.name ?? '');
   const [categoryId, setCategoryId] = useState(existing?.category.id ?? '');
@@ -136,7 +141,16 @@ export function InfraForm({
   const [editorOpen, setEditorOpen] = useState(false);
   const [regionMode, setRegionMode] = useState<'auto' | 'manual'>('auto');
   const [manualRegion, setManualRegion] = useState({ idsls: '', idsubsls: '' });
+  // koordinat: awalnya ikut GPS (create) / titik tersimpan (edit); bisa digeser di minimap
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    existing ? { lat: existing.lat, lng: existing.lng } : null,
+  );
+  const [followGps, setFollowGps] = useState(!existing);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isEdit && followGps && gps) setCoords({ lat: gps.lat, lng: gps.lng });
+  }, [isEdit, followGps, gps]);
 
   useEffect(() => {
     categoryApi.list().then((c) => setCategories(c.filter((x) => x.isActive))).catch(() => {});
@@ -175,7 +189,7 @@ export function InfraForm({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!isEdit && !gps) return;
+    if (!coords) return;
     if (regionMode === 'manual' && !manualRegion.idsls) {
       toast.error('Mode manual: kecamatan, desa/nagari, dan SLS wajib dipilih');
       return;
@@ -192,12 +206,17 @@ export function InfraForm({
         if (manualRegion.idsubsls) fd.append('idsubsls', manualRegion.idsubsls);
       }
       if (isEdit) {
+        // kirim koordinat hanya bila digeser dari titik tersimpan
+        if (coords.lat !== existing!.lat || coords.lng !== existing!.lng) {
+          fd.append('lat', String(coords.lat));
+          fd.append('lng', String(coords.lng));
+        }
         await infraApi.update(existing!.id, fd);
         toast.success('Infrastruktur diperbarui');
       } else {
-        fd.append('lat', String(gps!.lat));
-        fd.append('lng', String(gps!.lng));
-        fd.append('gps_accuracy_m', String(Math.round(gps!.accuracy)));
+        fd.append('lat', String(coords.lat));
+        fd.append('lng', String(coords.lng));
+        if (gps) fd.append('gps_accuracy_m', String(Math.round(gps.accuracy)));
         fd.append('project_id', projectId);
         const res = await infraApi.create(fd);
         if (res.meta?.warning) toast.warning(res.meta.warning);
@@ -266,26 +285,52 @@ export function InfraForm({
         )}
       </div>
 
-      {!isEdit && (
-        <div>
-          <span className="mb-1 block text-sm font-medium text-gray-700">Koordinat (otomatis dari GPS)</span>
-          {gps ? (
-            <p className="rounded-lg bg-gray-100 px-3 py-2.5 font-mono text-sm">
-              {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
-              <span className="ml-2 text-xs text-gray-500">±{Math.round(gps.accuracy)} m</span>
-            </p>
-          ) : (
-            <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
-              {gpsError ?? 'Menunggu sinyal GPS... Pastikan izin lokasi aktif.'}
-            </p>
-          )}
-        </div>
-      )}
-      {isEdit && (
-        <p className="rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-500">
-          Koordinat tidak bisa diubah. Jika titik salah, hapus dan buat ulang di lokasi.
-        </p>
-      )}
+      <div>
+        <span className="mb-1 block text-sm font-medium text-gray-700">
+          Koordinat{' '}
+          {!isEdit
+            ? '(dari GPS — geser pin untuk menyesuaikan)'
+            : canMovePin
+              ? '(geser pin bila titik kurang tepat)'
+              : ''}
+        </span>
+        {isEdit && !canMovePin && (
+          <p className="mb-2 rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-500">
+            Koordinat hanya bisa diubah oleh admin. Jika titik salah, hubungi admin atau hapus dan buat ulang di lokasi.
+          </p>
+        )}
+        {coords ? (
+          <div className="space-y-2">
+            {canMovePin && (
+              <MiniMapPicker
+                lat={coords.lat}
+                lng={coords.lng}
+                onChange={(p) => {
+                  setCoords(p);
+                  setFollowGps(false);
+                }}
+              />
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <p className="rounded-lg bg-gray-100 px-3 py-2 font-mono text-xs">
+                {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+                {!isEdit && followGps && gps && (
+                  <span className="ml-2 text-gray-500">±{Math.round(gps.accuracy)} m (GPS)</span>
+                )}
+              </p>
+              {!isEdit && !followGps && gps && (
+                <Button type="button" variant="secondary" onClick={() => setFollowGps(true)}>
+                  Ikuti GPS lagi
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+            {gpsError ?? 'Menunggu sinyal GPS... Pastikan izin lokasi aktif.'}
+          </p>
+        )}
+      </div>
 
       {/* wilayah: auto-detect dari titik, atau pilih manual sampai sub-SLS */}
       <div>
@@ -314,7 +359,7 @@ export function InfraForm({
       <Button
         type="submit"
         className="w-full"
-        disabled={saving || !name || !categoryId || (!isEdit && !gps) || (regionMode === 'manual' && !manualRegion.idsls)}
+        disabled={saving || !name || !categoryId || !coords || (regionMode === 'manual' && !manualRegion.idsls)}
       >
         {saving ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Simpan Infrastruktur'}
       </Button>

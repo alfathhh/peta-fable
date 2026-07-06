@@ -247,10 +247,10 @@ export async function updateInfrastructure(
 ) {
   const infra = await getEditable(id, user);
 
-  // Petugas TIDAK boleh mengubah koordinat (aturan domain #4); admin boleh (koreksi import)
+  // Edit koordinat HANYA admin (aturan domain #4); petugas: koordinat terkunci setelah dibuat
   if (user.role !== 'admin' && (input.lat !== undefined || input.lng !== undefined)) {
-    throw badRequest('Koordinat tidak bisa diubah. Hapus dan buat ulang di lokasi yang benar.', {
-      lat: ['Koordinat tidak bisa diubah oleh petugas'],
+    throw badRequest('Koordinat hanya bisa diubah oleh admin.', {
+      lat: ['Koordinat hanya bisa diubah oleh admin'],
     });
   }
 
@@ -273,7 +273,8 @@ export async function updateInfrastructure(
     }
   }
 
-  if (user.role === 'admin' && input.lat !== undefined && input.lng !== undefined) {
+  // Geser koordinat via minimap (admin): wilayah di-resolve ulang dari titik baru
+  if (input.lat !== undefined && input.lng !== undefined) {
     coordUpdate = { lat: input.lat, lng: input.lng };
     if (!input.idsls) {
       // tanpa pilihan manual → auto-detect ulang dari koordinat baru

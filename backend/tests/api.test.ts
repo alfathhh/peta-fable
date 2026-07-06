@@ -195,13 +195,34 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(res.status).toBe(404);
   });
 
-  it('petugas tidak boleh ubah lat/lng → 422', async () => {
-    const res = await request
+  it('edit koordinat: petugas → 422; admin geser → wilayah di-resolve ulang + flag outside', async () => {
+    // petugas (termasuk pemilik) tidak boleh mengubah koordinat
+    const denied = await request
       .put(`/api/infrastructures/${infraId}`)
       .set('Authorization', `Bearer ${petugasToken}`)
       .field('lat', '-0.5')
-      .field('lng', '100.2');
-    expect(res.status).toBe(422);
+      .field('lng', '100.15');
+    expect(denied.status).toBe(422);
+
+    // admin geser keluar desa proyek (masih dalam kec dummy) → outside true
+    const moved = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('lat', '-0.5')
+      .field('lng', '100.15');
+    expect(moved.status).toBe(200);
+    expect(moved.body.data.lat).toBe(-0.5);
+    expect(moved.body.data.isOutsideRegion).toBe(true);
+
+    // admin geser balik ke dalam desa proyek → outside false, iddesa ter-resolve lagi
+    const back = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('lat', '-0.7')
+      .field('lng', '100.0');
+    expect(back.status).toBe(200);
+    expect(back.body.data.isOutsideRegion).toBe(false);
+    expect(back.body.data.iddesa).toBe('1306010001');
   });
 
   it('infra baru berstatus pending: tidak tampil di peta umum, tampil di proyek pemilik', async () => {

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { Camera, Check, Pencil, Trash2, X } from 'lucide-react';
 import { categoryApi, infraApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
 import { Button, Input, LoadingState, Modal, Select, Textarea } from '../../components/ui';
+import { PhotoEditor } from '../../components/PhotoEditor';
+import { MiniMapPicker } from '../../components/map/MiniMapPicker';
+import { compressPhoto } from '../../utils/photo';
 import { toast } from '../../stores/toastStore';
 import type { Category, InfraDetail } from '../../types';
 
@@ -14,6 +17,10 @@ export default function AdminInfrastructures() {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<InfraDetail | null>(null);
   const [form, setForm] = useState({ name: '', category_id: '', description: '', lat: '', lng: '' });
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [editorSrc, setEditorSrc] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -43,6 +50,8 @@ export default function AdminInfrastructures() {
 
   function openEdit(r: InfraDetail) {
     setEditing(r);
+    setPhoto(null);
+    setPhotoPreview(r.photo_url);
     setForm({
       name: r.name,
       category_id: r.category.id,
@@ -50,6 +59,31 @@ export default function AdminInfrastructures() {
       lat: String(r.lat),
       lng: String(r.lng),
     });
+  }
+
+  async function editPhoto() {
+    if (photo) {
+      setEditorSrc(URL.createObjectURL(photo));
+      setEditorOpen(true);
+      return;
+    }
+    if (!editing?.photo_url) return;
+    try {
+      setEditorSrc(await infraApi.photoBlobUrl(editing.photo_url));
+      setEditorOpen(true);
+    } catch {
+      toast.error('Gagal memuat foto');
+    }
+  }
+
+  async function onCropped(file: File) {
+    try {
+      const compressed = await compressPhoto(file);
+      setPhoto(compressed);
+      setPhotoPreview(URL.createObjectURL(compressed));
+    } catch {
+      toast.error('Gagal memproses foto');
+    }
   }
 
   async function submit(e: FormEvent) {
@@ -63,6 +97,7 @@ export default function AdminInfrastructures() {
       fd.append('description', form.description);
       fd.append('lat', form.lat); // admin boleh koreksi koordinat (data import)
       fd.append('lng', form.lng);
+      if (photo) fd.append('photo', photo, 'foto.jpg');
       await infraApi.update(editing.id, fd);
       toast.success('Diperbarui');
       setEditing(null);
@@ -250,6 +285,36 @@ export default function AdminInfrastructures() {
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit Infrastruktur (admin)">
         <form onSubmit={submit} className="space-y-3">
+          {/* foto: ganti / crop / zoom seperti form petugas */}
+          <div>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Foto</span>
+            <div className="flex items-center gap-2">
+              <label className="flex flex-1 cursor-pointer items-center gap-3 rounded-lg border border-dashed border-gray-300 p-3 hover:bg-gray-50">
+                <Camera className="h-5 w-5 text-gray-400" />
+                <span className="text-sm text-gray-500">{photoPreview ? 'Ganti foto' : 'Pilih foto'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setEditorSrc(URL.createObjectURL(f));
+                      setEditorOpen(true);
+                    }
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              {photoPreview && (
+                <Button type="button" variant="secondary" onClick={() => void editPhoto()} title="Edit foto (crop/zoom)">
+                  <Pencil className="h-4 w-4" /> Edit
+                </Button>
+              )}
+            </div>
+            {photoPreview && <img src={photoPreview} alt="Pratinjau" className="mt-2 max-h-40 rounded-lg object-cover" />}
+          </div>
+
           <Input label="Nama" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <Select label="Kategori" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
             {categories.map((c) => (
@@ -258,6 +323,15 @@ export default function AdminInfrastructures() {
               </option>
             ))}
           </Select>
+
+          {/* koordinat: geser pin di minimap, atau ketik manual */}
+          {editing && !Number.isNaN(Number(form.lat)) && !Number.isNaN(Number(form.lng)) && (
+            <MiniMapPicker
+              lat={Number(form.lat)}
+              lng={Number(form.lng)}
+              onChange={(p) => setForm((f) => ({ ...f, lat: String(p.lat), lng: String(p.lng) }))}
+            />
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Input label="Latitude" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
             <Input label="Longitude" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
@@ -268,6 +342,8 @@ export default function AdminInfrastructures() {
           </Button>
         </form>
       </Modal>
+
+      <PhotoEditor src={editorSrc} open={editorOpen} onClose={() => setEditorOpen(false)} onDone={(f) => void onCropped(f)} />
     </div>
   );
 }
