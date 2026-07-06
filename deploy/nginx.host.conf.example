@@ -1,0 +1,22 @@
+# Contoh config nginx DI HOST VPS (bukan di dalam container) — menangani
+# TLS/HTTPS lalu meneruskan ke container frontend yang publish ke 127.0.0.1:8080.
+# Salin ke /etc/nginx/sites-available/peta.conf lalu jalankan certbot (lihat howto.md §5).
+#
+# Ganti "peta.contoh.go.id" dengan domain sungguhan sebelum dipakai.
+
+server {
+    listen 80;
+    server_name peta.contoh.go.id;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 25m;
+    }
+
+    # certbot --nginx akan menambahkan blok 443 + redirect otomatis di sini
+}

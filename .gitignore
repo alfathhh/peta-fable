@@ -4,6 +4,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 backend/storage/
 data/geojson/
 data/*.geojson

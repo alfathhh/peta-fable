@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+backend/storage
+frontend/dist
+data
+docs
+.git
+.claude
+*.log
+.env
+.env.*
+!.env.example

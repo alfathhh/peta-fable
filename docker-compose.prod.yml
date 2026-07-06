@@ -1,0 +1,53 @@
+# Compose untuk deploy VPS. Beda dengan docker-compose.yml (dev — hanya DB):
+# di sini backend & frontend juga di-build & dijalankan sebagai container.
+#
+# Wajib: siapkan file .env.prod di root (lihat .env.prod.example) sebelum
+# `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: peta
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: peta
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    # TIDAK di-publish ke host — hanya backend yang boleh mengakses DB
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://peta:${DB_PASSWORD}@db:5432/peta
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+    volumes:
+      - backend_storage:/app/backend/storage
+    # TIDAK di-publish ke host — hanya diakses lewat proxy nginx di service "frontend"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_BASEMAP_FALLBACK: "${VITE_BASEMAP_FALLBACK:-0}"
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # Bind ke 127.0.0.1 saja — nginx HOST (di luar Docker) yang menangani
+      # TLS/HTTPS publik dan reverse-proxy ke sini (lihat howto.md §5).
+      # Ganti FRONTEND_PORT di .env.prod bila 8080 bentrok dengan service lain.
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  dbdata:
+  backend_storage:

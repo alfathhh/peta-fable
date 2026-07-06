@@ -3,6 +3,7 @@
 Aplikasi web peta tematik (kab `1306`): wilayah 5 level (kab→kec→desa→SLS→sub-SLS),
 pinpoint infrastruktur berikon per kategori, dan manajemen kegiatan lapangan berbasis token.
 Dokumentasi lengkap ada di [docs/](docs/README.md) — mulai dari `docs/PRD.md`.
+Panduan langkah-demi-langkah (dev & deploy ke VPS) ada di **[howto.md](howto.md)**.
 
 ## Menjalankan (development)
 
