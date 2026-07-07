@@ -62,6 +62,11 @@ File GeoJSON mentah diletakkan di `data/` dan **tidak boleh di-commit / diakses 
 (lihat `docs/ARCHITECTURE.md` §5) — cukup dipakai sekali untuk import, sumber kebenaran
 setelahnya adalah tabel `regions` di PostGIS.
 
+> **Penting:** setelah import via CLI, **restart backend**. Server menyimpan cache
+> GeoJSON di memori dan CLI berjalan di proses terpisah, jadi peta masih menampilkan
+> data lama sampai server di-restart. (Upload lewat halaman admin tidak perlu restart —
+> cache dibersihkan otomatis.)
+
 ## 3. Test, lint, typecheck
 
 ```bash
