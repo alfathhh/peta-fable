@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 import { prisma } from '../lib/prisma';
 import { badRequest, notFound } from '../middlewares/errorHandler';
 import { levelOf } from '../lib/regionId';
@@ -28,6 +29,25 @@ function regionFilter(regionId: string | undefined): Record<string, string> {
 
 function photoUrl(photoPath: string | null): string | null {
   return photoPath ? `/api/files/${photoPath.replace(/\\/g, '/')}` : null;
+}
+
+function thumbPathOf(photoPath: string): string {
+  return photoPath.replace(/\.jpg$/i, '_thumb.jpg');
+}
+
+/** URL thumbnail bila filenya ada (foto lama dari sebelum fitur thumbnail tidak punya). */
+function photoThumbUrl(photoPath: string | null): string | null {
+  if (!photoPath) return null;
+  const thumb = thumbPathOf(photoPath);
+  return fs.existsSync(path.resolve(STORAGE_ROOT, thumb)) ? `/api/files/${thumb.replace(/\\/g, '/')}` : photoUrl(photoPath);
+}
+
+/** category_id bisa berisi daftar dipisah koma (filter multi-kategori = satu request). */
+function categoryFilter(categoryId: string | undefined) {
+  if (!categoryId) return {};
+  const ids = categoryId.split(',').map((s) => s.trim()).filter(Boolean);
+  if (ids.length === 0) return {};
+  return ids.length === 1 ? { categoryId: ids[0] } : { categoryId: { in: ids } };
 }
 
 /**
@@ -63,7 +83,7 @@ export async function listInfrastructures(
     where: {
       deletedAt: null,
       ...(showAllStatuses ? {} : { approvalStatus: 'approved' }),
-      ...(filters.category_id ? { categoryId: filters.category_id } : {}),
+      ...categoryFilter(filters.category_id),
       ...(filters.q ? { name: { contains: filters.q, mode: 'insensitive' } } : {}),
       ...(filters.project_id ? { projectId: filters.project_id } : {}),
       ...(filters.activity_id ? { activityId: filters.activity_id } : {}),
@@ -76,6 +96,7 @@ export async function listInfrastructures(
       lng: true,
       isOutsideRegion: true,
       approvalStatus: true,
+      approvalNote: true,
       category: categorySelect,
     },
     take: 2000,
@@ -111,6 +132,7 @@ export async function getInfrastructure(id: string, user: { sub: string; role: s
   return {
     ...infra,
     photo_url: photoUrl(infra.photoPath),
+    photo_thumb_url: photoThumbUrl(infra.photoPath),
     region_names: regionNames,
     gmaps_url: `https://www.google.com/maps?q=${infra.lat},${infra.lng}`,
   };
@@ -121,13 +143,22 @@ async function savePhoto(id: string, buffer: Buffer): Promise<string> {
   fs.mkdirSync(dir, { recursive: true });
   const relPath = path.join('infra', id, `${Date.now()}.jpg`);
   fs.writeFileSync(path.join(STORAGE_ROOT, relPath), buffer);
+  // thumbnail kecil untuk popup peta — hemat kuota petugas di lapangan
+  try {
+    const thumb = await sharp(buffer).resize({ width: 320, withoutEnlargement: true }).jpeg({ quality: 70 }).toBuffer();
+    fs.writeFileSync(path.resolve(STORAGE_ROOT, thumbPathOf(relPath)), thumb);
+  } catch (err) {
+    console.error('Gagal membuat thumbnail (foto utama tetap tersimpan):', err);
+  }
   return relPath.replace(/\\/g, '/');
 }
 
 function removePhoto(photoPath: string | null): void {
   if (!photoPath) return;
-  const abs = path.resolve(STORAGE_ROOT, photoPath);
-  if (abs.startsWith(STORAGE_ROOT) && fs.existsSync(abs)) fs.unlinkSync(abs);
+  for (const rel of [photoPath, thumbPathOf(photoPath)]) {
+    const abs = path.resolve(STORAGE_ROOT, rel);
+    if (abs.startsWith(STORAGE_ROOT) && fs.existsSync(abs)) fs.unlinkSync(abs);
+  }
 }
 
 /**
@@ -324,13 +355,13 @@ export async function deleteInfrastructure(id: string, user: { sub: string; role
   await prisma.infrastructure.update({ where: { id }, data: { deletedAt: new Date() } }); // soft delete
 }
 
-/** ACC/tolak infrastruktur — hanya admin (dipaksa di route). */
-export async function setApprovalStatus(id: string, status: 'pending' | 'approved' | 'rejected') {
+/** ACC/tolak infrastruktur — hanya admin (dipaksa di route). Note = alasan (terlihat pembuat). */
+export async function setApprovalStatus(id: string, status: 'pending' | 'approved' | 'rejected', note?: string | null) {
   const infra = await prisma.infrastructure.findFirst({ where: { id, deletedAt: null } });
   if (!infra) throw notFound('Infrastruktur tidak ditemukan');
   return prisma.infrastructure.update({
     where: { id },
-    data: { approvalStatus: status },
+    data: { approvalStatus: status, approvalNote: status === 'approved' ? null : (note ?? null) },
     include: { category: categorySelect },
   });
 }
@@ -352,7 +383,7 @@ export async function adminListInfrastructures(filters: {
   const perPage = Math.min(100, Math.max(1, filters.per_page ?? 20));
   const where = {
     deletedAt: null,
-    ...(filters.category_id ? { categoryId: filters.category_id } : {}),
+    ...categoryFilter(filters.category_id),
     ...(filters.q ? { name: { contains: filters.q, mode: 'insensitive' as const } } : {}),
     ...(filters.project_id ? { projectId: filters.project_id } : {}),
     ...(filters.activity_id ? { activityId: filters.activity_id } : {}),

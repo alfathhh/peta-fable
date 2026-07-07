@@ -4,6 +4,7 @@ import { requireRole } from '../middlewares/requireRole';
 import { ok, created } from '../lib/respond';
 import { categorySchema } from '../schemas';
 import * as categoryService from '../services/categoryService';
+import * as auditService from '../services/auditService';
 
 export const categoryRoutes = Router();
 
@@ -19,7 +20,9 @@ categoryRoutes.get('/categories', async (_req, res, next) => {
 
 categoryRoutes.post('/admin/categories', requireRole('admin'), async (req, res, next) => {
   try {
-    created(res, await categoryService.createCategory(categorySchema.parse(req.body)));
+    const cat = await categoryService.createCategory(categorySchema.parse(req.body));
+    auditService.record(req.user, 'create', 'category', cat.id, { name: cat.name });
+    created(res, cat);
   } catch (err) {
     next(err);
   }
@@ -36,6 +39,7 @@ categoryRoutes.put('/admin/categories/:id', requireRole('admin'), async (req, re
 categoryRoutes.delete('/admin/categories/:id', requireRole('admin'), async (req, res, next) => {
   try {
     await categoryService.deleteCategory(req.params.id);
+    auditService.record(req.user, 'delete', 'category', req.params.id);
     ok(res, { message: 'Kategori dihapus' });
   } catch (err) {
     next(err);

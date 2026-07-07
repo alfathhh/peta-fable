@@ -6,6 +6,7 @@ import { ok, created } from '../lib/respond';
 import { activitySchema, claimTokenSchema, createTokenSchema, updateTokenSchema } from '../schemas';
 import * as activityService from '../services/activityService';
 import * as tokenService from '../services/tokenService';
+import * as auditService from '../services/auditService';
 
 export const activityRoutes = Router();
 
@@ -62,7 +63,9 @@ activityRoutes.get('/admin/tokens', requireRole('admin'), async (req, res, next)
 
 activityRoutes.post('/admin/tokens', requireRole('admin'), async (req, res, next) => {
   try {
-    created(res, await tokenService.createToken(createTokenSchema.parse(req.body), req.user!.sub));
+    const token = await tokenService.createToken(createTokenSchema.parse(req.body), req.user!.sub);
+    auditService.record(req.user, 'create', 'token', token.id, { activity: token.activity.name });
+    created(res, token);
   } catch (err) {
     next(err);
   }
@@ -79,6 +82,7 @@ activityRoutes.put('/admin/tokens/:id', requireRole('admin'), async (req, res, n
 activityRoutes.delete('/admin/tokens/:id', requireRole('admin'), async (req, res, next) => {
   try {
     await tokenService.deleteToken(req.params.id);
+    auditService.record(req.user, 'delete', 'token', req.params.id);
     ok(res, { message: 'Token dihapus' });
   } catch (err) {
     next(err);

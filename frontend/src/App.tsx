@@ -10,6 +10,7 @@ import MapHome from './pages/MapHome';
 const MyActivities = lazy(() => import('./pages/MyActivities'));
 const Projects = lazy(() => import('./pages/Projects'));
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/Users'));
 const AdminCategories = lazy(() => import('./pages/admin/Categories'));
 const AdminActivitiesTokens = lazy(() => import('./pages/admin/ActivitiesTokens'));
@@ -17,6 +18,7 @@ const AdminInfrastructures = lazy(() => import('./pages/admin/Infrastructures'))
 const AdminProjects = lazy(() => import('./pages/admin/Projects'));
 const AdminRegionUpload = lazy(() => import('./pages/admin/RegionUpload'));
 const AdminImportExport = lazy(() => import('./pages/admin/ImportExport'));
+const AdminAuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -69,6 +71,7 @@ export default function App() {
           />
           {(
             [
+              ['admin/dashboard', AdminDashboard],
               ['admin/pengguna', AdminUsers],
               ['admin/kategori', AdminCategories],
               ['admin/kegiatan', AdminActivitiesTokens],
@@ -76,6 +79,7 @@ export default function App() {
               ['admin/proyek', AdminProjects],
               ['admin/wilayah', AdminRegionUpload],
               ['admin/import-export', AdminImportExport],
+              ['admin/audit', AdminAuditLogs],
             ] as const
           ).map(([path, Component]) => (
             <Route

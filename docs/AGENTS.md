@@ -68,9 +68,11 @@ npm run lint && npm run typecheck
 2. **Sorting wilayah** = order by id sebagai string ascending.
 3. **Infrastruktur tidak pernah ditampilkan tanpa filter.** `GET /infrastructures`
    harus menolak (422) request tanpa `category_id`/`q`.
-4. **Koordinat infrastruktur milik petugas berasal dari GPS** — tidak ada input
-   manual lat/lng di UI petugas, dan endpoint update menolak perubahan lat/lng
-   dari peran petugas.
+4. **Koordinat infrastruktur petugas berasal dari GPS saat titik dibuat** —
+   boleh disesuaikan lewat minimap sebelum disimpan (keputusan PO, DECISIONS #9).
+   Saat EDIT, koordinat terkunci untuk petugas (endpoint menolak 422); hanya
+   admin yang boleh mengubah lat/lng — server me-resolve ulang wilayah + flag
+   `is_outside_region`.
 5. **Otorisasi di backend** (middleware `auth` + `requireRole` + cek kepemilikan
    di service), bukan cuma menyembunyikan tombol di React.
 6. **Hanya 2 role: `admin` dan `petugas`.** Jangan menambah role lain.

@@ -11,6 +11,7 @@ import { activityRoutes } from './routes/activityRoutes';
 import { projectRoutes } from './routes/projectRoutes';
 import { userRoutes } from './routes/userRoutes';
 import { exportImportRoutes } from './routes/exportImportRoutes';
+import { dashboardRoutes } from './routes/dashboardRoutes';
 import { fileRoutes } from './routes/fileRoutes';
 
 export function createApp() {
@@ -31,6 +32,7 @@ export function createApp() {
   app.use('/api', projectRoutes);
   app.use('/api', userRoutes);
   app.use('/api', exportImportRoutes);
+  app.use('/api', dashboardRoutes);
   app.use('/api', fileRoutes);
 
   app.use((_req, res) => res.status(404).json({ message: 'Endpoint tidak ditemukan' }));

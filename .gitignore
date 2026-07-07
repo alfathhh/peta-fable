@@ -10,3 +10,6 @@ data/geojson/
 data/*.geojson
 data/*.json
 .DS_Store
+
+peta/
+*.geojson

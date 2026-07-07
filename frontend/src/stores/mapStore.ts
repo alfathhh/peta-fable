@@ -8,20 +8,32 @@ export interface ActiveRegion {
   bbox: [number, number, number, number] | null;
 }
 
+export interface ChoroplethBucket {
+  from: number;
+  to: number;
+  color: string;
+}
+
 interface MapState {
   activeRegion: ActiveRegion | null;
   categoryFilter: string[]; // id kategori yang dicentang
   infraSearch: string;
+  choropleth: boolean; // pewarnaan poligon berdasarkan jumlah infrastruktur
+  choroplethBuckets: ChoroplethBucket[] | null; // diisi RegionLayer untuk legenda
   setActiveRegion: (region: ActiveRegion | null) => void;
   setCategoryFilter: (ids: string[]) => void;
   toggleCategory: (id: string) => void;
   setInfraSearch: (q: string) => void;
+  setChoropleth: (on: boolean) => void;
+  setChoroplethBuckets: (buckets: ChoroplethBucket[] | null) => void;
 }
 
 export const useMapStore = create<MapState>((set) => ({
   activeRegion: null,
   categoryFilter: [],
   infraSearch: '',
+  choropleth: false,
+  choroplethBuckets: null,
   setActiveRegion: (activeRegion) => set({ activeRegion }),
   setCategoryFilter: (categoryFilter) => set({ categoryFilter }),
   toggleCategory: (id) =>
@@ -31,4 +43,6 @@ export const useMapStore = create<MapState>((set) => ({
         : [...s.categoryFilter, id],
     })),
   setInfraSearch: (infraSearch) => set({ infraSearch }),
+  setChoropleth: (choropleth) => set({ choropleth, ...(choropleth ? {} : { choroplethBuckets: null }) }),
+  setChoroplethBuckets: (choroplethBuckets) => set({ choroplethBuckets }),
 }));

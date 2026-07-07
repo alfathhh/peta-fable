@@ -167,6 +167,7 @@ model Infrastructure {
   idsubsls        String?                           @db.VarChar(16)
   isOutsideRegion Boolean                           @default(false) @map("is_outside_region")
   approvalStatus  String                            @default("pending") @map("approval_status") @db.VarChar(20) // pending|approved|rejected
+  approvalNote    String?                           @map("approval_note") // alasan penolakan, terlihat oleh pembuat
   userId          String                            @map("user_id")
   projectId       String?                           @map("project_id")
   activityId      String?                           @map("activity_id")
@@ -188,6 +189,23 @@ model Infrastructure {
   @@index([isOutsideRegion])
   @@index([approvalStatus])
   @@map("infrastructures")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id") // tanpa FK — log tetap utuh walau user dihapus
+  username  String?  @db.VarChar(50)
+  role      String?  @db.VarChar(20)
+  action    String   @db.VarChar(50)
+  entity    String   @db.VarChar(50)
+  entityId  String?  @map("entity_id")
+  detail    Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([userId])
+  @@map("audit_logs")
 }
 
 model RegionUpload {

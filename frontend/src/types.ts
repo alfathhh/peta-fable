@@ -47,7 +47,47 @@ export interface InfraMarkerData {
   lng: number;
   isOutsideRegion: boolean;
   approvalStatus: ApprovalStatus;
+  approvalNote?: string | null;
   category: { id: string; name: string; icon: string; color: string };
+}
+
+export interface RegionStat {
+  region_id: string;
+  count: number;
+}
+
+export interface DashboardData {
+  totals: {
+    users: number;
+    infrastructures: number;
+    pending_approval: number;
+    outside_region: number;
+    active_projects: number;
+    activities: number;
+    active_tokens: number;
+  };
+  by_category: { category_id: string; name: string; icon: string; color: string; count: number }[];
+  by_kecamatan: { region_id: string; name: string; count: number }[];
+  latest: {
+    id: string;
+    name: string;
+    category: { name: string; icon: string; color: string };
+    username: string;
+    approval_status: ApprovalStatus;
+    created_at: string;
+  }[];
+}
+
+export interface AuditLogRow {
+  id: string;
+  userId: string | null;
+  username: string | null;
+  role: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface InfraDetail extends InfraMarkerData {

@@ -100,16 +100,12 @@ export function InfraMarkers() {
 
     async function render() {
       try {
-        const requests = categoryFilter.length
-          ? categoryFilter.map((catId) =>
-              infraApi.list({
-                category_id: catId,
-                q: infraSearch.trim() || undefined,
-                region_id: activeRegion?.region_id,
-              }),
-            )
-          : [infraApi.list({ q: infraSearch.trim(), region_id: activeRegion?.region_id })];
-        const results = (await Promise.all(requests)).flat();
+        // satu request — backend menerima category_id berbentuk daftar dipisah koma
+        const results = await infraApi.list({
+          category_id: categoryFilter.length ? categoryFilter.join(',') : undefined,
+          q: infraSearch.trim() || undefined,
+          region_id: activeRegion?.region_id,
+        });
         if (cancelled || !map) return;
 
         const markers = results.map((infra) => {

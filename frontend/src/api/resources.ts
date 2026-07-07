@@ -2,7 +2,9 @@ import { api } from './client';
 import type {
   Activity,
   ActivityToken,
+  AuditLogRow,
   Category,
+  DashboardData,
   InfraDetail,
   InfraMarkerData,
   MyActivity,
@@ -12,6 +14,7 @@ import type {
   RegionDetail,
   RegionOption,
   RegionSearchResult,
+  RegionStat,
   User,
 } from '../types';
 
@@ -36,6 +39,13 @@ export const regionApi = {
     api.get<{ data: RegionSearchResult[] }>('/regions/search', { params: { q } }).then((r) => r.data.data),
   detail: (regionId: string) =>
     api.get<{ data: RegionDetail }>(`/regions/${regionId}`).then((r) => r.data.data),
+  /** Jumlah infrastruktur approved per wilayah — untuk choropleth. */
+  stats: (level: string, parent?: string, categoryIds?: string[]) =>
+    api
+      .get<{ data: RegionStat[] }>('/regions/stats', {
+        params: { level, parent, category_id: categoryIds?.length ? categoryIds.join(',') : undefined },
+      })
+      .then((r) => r.data.data),
   adminUpload: (level: string, file: File) => {
     const fd = new FormData();
     fd.append('level', level);
@@ -67,8 +77,10 @@ export const infraApi = {
   update: (id: string, fd: FormData) =>
     api.put<{ data: InfraDetail }>(`/infrastructures/${id}`, fd).then((r) => r.data.data),
   remove: (id: string) => api.delete(`/infrastructures/${id}`),
-  setApproval: (id: string, status: 'pending' | 'approved' | 'rejected') =>
-    api.put<{ data: InfraDetail }>(`/admin/infrastructures/${id}/approval`, { status }).then((r) => r.data.data),
+  setApproval: (id: string, status: 'pending' | 'approved' | 'rejected', note?: string) =>
+    api
+      .put<{ data: InfraDetail }>(`/admin/infrastructures/${id}/approval`, { status, note: note || undefined })
+      .then((r) => r.data.data),
   /** Ambil foto ber-auth sebagai object URL (untuk editor foto). */
   photoBlobUrl: (photoUrl: string) =>
     api
@@ -159,6 +171,19 @@ export async function downloadBlob(url: string, params?: Record<string, string>)
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+export const dashboardApi = {
+  get: () => api.get<{ data: DashboardData }>('/admin/dashboard').then((r) => r.data.data),
+};
+
+export const auditApi = {
+  list: (params: { page?: number; entity?: string }) =>
+    api
+      .get<{ data: AuditLogRow[]; meta: { page: number; total_pages: number; total: number } }>('/admin/audit-logs', {
+        params,
+      })
+      .then((r) => r.data),
+};
 
 export const importApi = {
   validate: (file: File) => {

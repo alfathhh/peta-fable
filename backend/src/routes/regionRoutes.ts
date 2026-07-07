@@ -9,6 +9,7 @@ import { ok } from '../lib/respond';
 import { LEVELS, type RegionLevel } from '../lib/regionId';
 import * as regionService from '../services/regionService';
 import * as regionImport from '../services/regionImportService';
+import * as auditService from '../services/auditService';
 
 export const regionRoutes = Router();
 
@@ -48,6 +49,21 @@ regionRoutes.get('/regions/options', async (req, res, next) => {
   }
 });
 
+// Jumlah infrastruktur (approved) per wilayah pada satu level — untuk choropleth
+regionRoutes.get('/regions/stats', async (req, res, next) => {
+  try {
+    const level = String(req.query.level ?? '');
+    if (!level) throw badRequest('Parameter level wajib diisi', { level: ['Wajib diisi'] });
+    const parent = req.query.parent ? String(req.query.parent) : undefined;
+    const categoryIds = req.query.category_id
+      ? String(req.query.category_id).split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+    ok(res, await regionService.getRegionStats(level, parent, categoryIds));
+  } catch (err) {
+    next(err);
+  }
+});
+
 regionRoutes.get('/regions/:regionId', async (req, res, next) => {
   try {
     ok(res, await regionService.getRegionDetail(req.params.regionId));
@@ -62,13 +78,20 @@ regionRoutes.post('/admin/regions/upload', requireRole('admin'), fileUpload.sing
     if (!(LEVELS as string[]).includes(level)) throw badRequest('Level tidak valid');
     if (!req.file) throw badRequest('File geojson wajib diunggah');
     const fc = regionImport.parseFeatureCollection(req.file.buffer);
-    const result = await regionImport.importRegions({
+    // proses di background — file sub-SLS besar tidak memblokir request;
+    // status dipantau lewat GET /admin/regions/uploads
+    const uploadId = await regionImport.startRegionImportAsync({
       level,
       fc,
       filename: req.file.originalname,
       uploadedBy: req.user!.sub,
     });
-    ok(res, { upload_id: result.uploadId, status: 'done', feature_count: result.featureCount });
+    auditService.record(req.user, 'upload', 'regions', uploadId, {
+      level,
+      filename: req.file.originalname,
+      features: fc.features.length,
+    });
+    ok(res, { upload_id: uploadId, status: 'processing' });
   } catch (err) {
     next(err);
   }

@@ -299,6 +299,9 @@ export default function ProjectDetail() {
                     {i.category.name}
                     {i.isOutsideRegion && <span className="ml-1 text-amber-600">- di luar wilayah</span>}
                   </p>
+                  {i.approvalStatus === 'rejected' && i.approvalNote && (
+                    <p className="text-xs text-red-600">Alasan ditolak: {i.approvalNote}</p>
+                  )}
                 </div>
                 <span
                   className={`flex-none rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -308,6 +311,7 @@ export default function ProjectDetail() {
                         ? 'bg-red-100 text-red-600'
                         : 'bg-amber-100 text-amber-700'
                   }`}
+                  title={i.approvalStatus === 'rejected' && i.approvalNote ? `Alasan: ${i.approvalNote}` : undefined}
                 >
                   {i.approvalStatus === 'approved' ? 'Di-ACC' : i.approvalStatus === 'rejected' ? 'Ditolak' : 'Menunggu ACC'}
                 </span>

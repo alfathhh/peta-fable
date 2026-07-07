@@ -26,6 +26,7 @@ async function buildSheet(module: ExportModule, filters: Record<string, string |
       const rows = await prisma.infrastructure.findMany({
         where: {
           deletedAt: null,
+          ...(filters.user_id ? { userId: filters.user_id } : {}), // dipakai export "data saya" petugas
           ...(filters.category_id ? { categoryId: filters.category_id } : {}),
           ...(filters.q ? { name: { contains: filters.q, mode: 'insensitive' } } : {}),
           ...(filters.is_outside_region !== undefined && filters.is_outside_region !== ''

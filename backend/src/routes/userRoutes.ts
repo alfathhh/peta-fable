@@ -4,6 +4,7 @@ import { requireRole } from '../middlewares/requireRole';
 import { ok, created } from '../lib/respond';
 import { createUserSchema, updateUserSchema } from '../schemas';
 import * as userService from '../services/userService';
+import * as auditService from '../services/auditService';
 
 export const userRoutes = Router();
 
@@ -21,7 +22,9 @@ userRoutes.get('/admin/users', async (_req, res, next) => {
 
 userRoutes.post('/admin/users', async (req, res, next) => {
   try {
-    created(res, await userService.createUser(createUserSchema.parse(req.body)));
+    const user = await userService.createUser(createUserSchema.parse(req.body));
+    auditService.record(req.user, 'create', 'user', user.id, { username: user.username, role: user.role });
+    created(res, user);
   } catch (err) {
     next(err);
   }
@@ -29,7 +32,14 @@ userRoutes.post('/admin/users', async (req, res, next) => {
 
 userRoutes.put('/admin/users/:id', async (req, res, next) => {
   try {
-    ok(res, await userService.updateUser(req.params.id, updateUserSchema.parse(req.body)));
+    const body = updateUserSchema.parse(req.body);
+    const user = await userService.updateUser(req.params.id, body);
+    auditService.record(req.user, 'update', 'user', user.id, {
+      username: user.username,
+      ...(body.password ? { password_reset: true } : {}),
+      ...(body.is_active !== undefined ? { is_active: body.is_active } : {}),
+    });
+    ok(res, user);
   } catch (err) {
     next(err);
   }
@@ -38,6 +48,7 @@ userRoutes.put('/admin/users/:id', async (req, res, next) => {
 userRoutes.delete('/admin/users/:id', async (req, res, next) => {
   try {
     await userService.deleteUser(req.params.id, req.user!.sub);
+    auditService.record(req.user, 'delete', 'user', req.params.id);
     ok(res, { message: 'User dihapus' });
   } catch (err) {
     next(err);

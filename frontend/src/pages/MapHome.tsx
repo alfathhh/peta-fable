@@ -72,11 +72,35 @@ function RegionInfoPanel() {
   );
 }
 
+/** Legenda choropleth (buckets diisi RegionLayer). */
+function ChoroplethLegend() {
+  const buckets = useMapStore((s) => s.choroplethBuckets);
+  if (!buckets) return null;
+  return (
+    <div className="pointer-events-auto rounded-xl bg-white p-3 shadow-lg">
+      <p className="mb-1.5 text-xs font-semibold text-gray-600">Jumlah infrastruktur</p>
+      <ul className="space-y-1">
+        <li className="flex items-center gap-2 text-xs">
+          <span className="h-3.5 w-5 rounded-sm border border-gray-300" style={{ background: '#f3f4f6' }} />0
+        </li>
+        {buckets.map((b) => (
+          <li key={b.from} className="flex items-center gap-2 text-xs">
+            <span className="h-3.5 w-5 rounded-sm border border-gray-300" style={{ background: b.color }} />
+            {b.from === b.to ? b.from : `${b.from}–${b.to}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function MapHome() {
   const [basemap, setBasemap] = useState<BasemapKey>('street');
   const [panelOpen, setPanelOpen] = useState(false);
   const [locate, setLocate] = useState(false);
   const setActiveRegion = useMapStore((s) => s.setActiveRegion);
+  const choropleth = useMapStore((s) => s.choropleth);
+  const setChoropleth = useMapStore((s) => s.setChoropleth);
 
   return (
     <div className="relative h-full">
@@ -148,12 +172,23 @@ export default function MapHome() {
               <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Infrastruktur</h3>
               <CategoryFilter />
             </div>
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Tematik</h3>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input type="checkbox" checked={choropleth} onChange={(e) => setChoropleth(e.target.checked)} className="h-4 w-4" />
+                Pewarnaan jumlah infrastruktur (choropleth)
+              </label>
+              <p className="mt-1 text-xs text-gray-500">
+                Mewarnai wilayah berdasarkan jumlah infrastruktur ter-ACC; ikut filter kategori bila dicentang.
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* panel info wilayah aktif */}
-      <div className="pointer-events-none absolute bottom-6 left-3 z-[1000] w-72 max-w-[calc(100vw-6rem)]">
+      {/* panel info wilayah aktif + legenda choropleth */}
+      <div className="pointer-events-none absolute bottom-6 left-3 z-[1000] flex w-72 max-w-[calc(100vw-6rem)] flex-col gap-2">
+        <ChoroplethLegend />
         <RegionInfoPanel />
       </div>
     </div>

@@ -110,8 +110,14 @@ export default function AdminInfrastructures() {
   }
 
   async function setApproval(r: InfraDetail, status: 'approved' | 'rejected') {
+    let note: string | undefined;
+    if (status === 'rejected') {
+      const input = prompt(`Alasan penolakan "${r.name}" (terlihat oleh petugas, opsional):`);
+      if (input === null) return; // batal
+      note = input.trim() || undefined;
+    }
     try {
-      await infraApi.setApproval(r.id, status);
+      await infraApi.setApproval(r.id, status, note);
       toast.success(status === 'approved' ? `"${r.name}" di-ACC — tampil di peta umum` : `"${r.name}" ditolak`);
       void load();
     } catch (err) {

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: peta
+          POSTGRES_PASSWORD: peta
+          POSTGRES_DB: peta_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U peta"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://peta:peta@localhost:5434/peta_test
+      DATABASE_URL_TEST: postgresql://peta:peta@localhost:5434/peta_test
+      JWT_SECRET: ci-test-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+        working-directory: backend
+      - run: npm run lint --workspace=backend
+      - run: npm run typecheck --workspace=backend
+      - run: npm test --workspace=backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspace=frontend
+      - run: npm run typecheck --workspace=frontend
+      - run: npm test --workspace=frontend
+      - run: npm run build --workspace=frontend
+      # Aturan privasi GeoJSON (DECISIONS #6): build FE tidak boleh mengandung
+      # DATA wilayah yang dibundel. Catatan: grep '"FeatureCollection"' saja
+      # false-positive — string itu ada di kode library Leaflet/shpjs. Yang
+      # dicari adalah data geometri ter-embed (array koordinat sebagai JSON).
+      - name: Pastikan tidak ada data GeoJSON bocor ke build
+        run: |
+          if grep -rlE 'coordinates"\s*:\s*\[\[' frontend/dist; then
+            echo "::error::Build frontend mengandung data koordinat GeoJSON — data wilayah bocor ke aset statis!"
+            exit 1
+          fi
+          if ls frontend/dist/**/*.geojson frontend/dist/*.geojson 2>/dev/null; then
+            echo "::error::Ada file .geojson di build frontend!"
+            exit 1
+          fi
+          echo "OK: tidak ada data GeoJSON di build."

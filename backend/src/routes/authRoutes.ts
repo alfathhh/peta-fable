@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { auth } from '../middlewares/auth';
+import { loginLimiter } from '../middlewares/rateLimit';
 import { ok } from '../lib/respond';
 import { changePasswordSchema, loginSchema } from '../schemas';
 import * as authService from '../services/authService';
 
 export const authRoutes = Router();
 
-authRoutes.post('/login', async (req, res, next) => {
+authRoutes.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const body = loginSchema.parse(req.body);
     ok(res, await authService.login(body.username, body.password));

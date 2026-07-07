@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { FolderKanban, Plus, Trash2 } from 'lucide-react';
-import { activityApi, projectApi } from '../api/resources';
+import { Download, FolderKanban, Plus, Trash2 } from 'lucide-react';
+import { activityApi, downloadBlob, projectApi } from '../api/resources';
 import { apiErrorMessage } from '../api/client';
 import { Button, EmptyState, Input, LoadingState, Modal, Select } from '../components/ui';
 import { RegionCascade } from '../components/filters/RegionCascade';
@@ -63,9 +63,18 @@ export default function Projects() {
         <h1 className="flex items-center gap-2 text-lg font-semibold">
           <FolderKanban className="h-5 w-5 text-blue-600" /> Proyek Saya
         </h1>
-        <Button onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> Proyek Baru
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => downloadBlob('/my/export/infrastructures', { format: 'xlsx' }).catch(() => toast.error('Gagal export'))}
+            title="Unduh semua infrastruktur yang Anda input (XLSX)"
+          >
+            <Download className="h-4 w-4" /> Export Data Saya
+          </Button>
+          <Button onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4" /> Proyek Baru
+          </Button>
+        </div>
       </div>
 
       {projects === null ? (

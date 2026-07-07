@@ -307,4 +307,81 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(good.body.data.idkec).toBe('1306010');
     expect(good.body.data.isOutsideRegion).toBe(false);
   });
+
+  it('tolak dengan alasan → note terlihat pemilik; ACC menghapus note', async () => {
+    const reject = await request
+      .put(`/api/admin/infrastructures/${infraId}/approval`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'rejected', note: 'Foto kurang jelas, ulangi' });
+    expect(reject.status).toBe(200);
+    expect(reject.body.data.approvalNote).toBe('Foto kurang jelas, ulangi');
+
+    const ownList = await request
+      .get(`/api/infrastructures?project_id=${projectId}`)
+      .set('Authorization', `Bearer ${petugasToken}`);
+    const mine = ownList.body.data.find((i: { id: string }) => i.id === infraId);
+    expect(mine.approvalNote).toBe('Foto kurang jelas, ulangi');
+
+    const approve = await request
+      .put(`/api/admin/infrastructures/${infraId}/approval`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'approved' });
+    expect(approve.body.data.approvalNote).toBeNull();
+  });
+
+  it('filter multi-kategori (comma) dalam satu request', async () => {
+    const cat2 = await request
+      .post('/api/admin/categories')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: 'Kesehatan', icon: 'hospital', color: '#dc2626' });
+    const res = await request
+      .get(`/api/infrastructures?category_id=${categoryId},${cat2.body.data.id}&region_id=1306010001`)
+      .set('Authorization', `Bearer ${petugasToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('search wilayah full-text: prefix kata & angka id', async () => {
+    const byName = await request.get('/api/regions/search?q=desa dum').set('Authorization', `Bearer ${adminToken}`);
+    expect(byName.status).toBe(200);
+    expect(byName.body.data.some((r: { region_id: string }) => r.region_id === '1306010001')).toBe(true);
+
+    const byId = await request.get('/api/regions/search?q=130601').set('Authorization', `Bearer ${adminToken}`);
+    expect(byId.body.data.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('stats choropleth per level + dashboard & audit log admin-only', async () => {
+    const stats = await request
+      .get('/api/regions/stats?level=desa&parent=1306')
+      .set('Authorization', `Bearer ${petugasToken}`);
+    expect(stats.status).toBe(200);
+    const desa = stats.body.data.find((s: { region_id: string }) => s.region_id === '1306010001');
+    expect(desa.count).toBeGreaterThanOrEqual(1); // yang approved saja
+
+    const dashForbidden = await request.get('/api/admin/dashboard').set('Authorization', `Bearer ${petugasToken}`);
+    expect(dashForbidden.status).toBe(403);
+    const dash = await request.get('/api/admin/dashboard').set('Authorization', `Bearer ${adminToken}`);
+    expect(dash.status).toBe(200);
+    expect(dash.body.data.totals.infrastructures).toBeGreaterThanOrEqual(1);
+
+    // audit log terekam untuk aksi approve/reject sebelumnya (ditulis async — beri jeda)
+    await new Promise((r) => setTimeout(r, 300));
+    const logs = await request.get('/api/admin/audit-logs?entity=infrastructure').set('Authorization', `Bearer ${adminToken}`);
+    expect(logs.status).toBe(200);
+    expect(logs.body.data.some((l: { action: string }) => l.action === 'reject')).toBe(true);
+  });
+
+  it('petugas export data miliknya (csv)', async () => {
+    const res = await request
+      .get('/api/my/export/infrastructures?format=csv')
+      .set('Authorization', `Bearer ${petugasToken}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.text).toContain('SD Dalam');
+
+    const adminBlocked = await request
+      .get('/api/my/export/infrastructures?format=csv')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(adminBlocked.status).toBe(403);
+  });
 });

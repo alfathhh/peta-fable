@@ -119,6 +119,7 @@ export const updateInfraSchema = z.object({
 
 export const approvalSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected']),
+  note: z.string().max(500).optional().nullable(), // alasan penolakan (terlihat pembuat)
 });
 
 // ---------- layers ----------

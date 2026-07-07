@@ -60,6 +60,26 @@ export function parseFeatureCollection(raw: string | Buffer): FeatureCollection 
 }
 
 /**
+ * Versi background untuk endpoint admin: buat record riwayat dulu, balas cepat,
+ * proses import jalan di belakang (file sub-SLS besar tidak memblokir request).
+ * Status dipantau lewat GET /admin/regions/uploads.
+ */
+export async function startRegionImportAsync(opts: {
+  level: RegionLevel;
+  fc: FeatureCollection;
+  filename: string;
+  uploadedBy: string;
+}): Promise<string> {
+  const upload = await prisma.regionUpload.create({
+    data: { level: opts.level, filename: opts.filename, uploadedBy: opts.uploadedBy, status: 'processing' },
+  });
+  void importRegions({ ...opts, existingUploadId: upload.id }).catch(() => {
+    // status 'failed' + note sudah dicatat di dalam importRegions
+  });
+  return upload.id;
+}
+
+/**
  * Import/replace data wilayah satu level (dipakai CLI & endpoint admin upload).
  * Replace dilakukan dalam satu transaction; gagal validasi = rollback.
  */
@@ -69,6 +89,7 @@ export async function importRegions(opts: {
   filename: string;
   uploadedBy?: string;
   sourceVersion?: string;
+  existingUploadId?: string;
 }): Promise<{ uploadId: string | null; featureCount: number }> {
   const { level, fc } = opts;
   const expectedLen = LEVEL_TO_LENGTH[level];
@@ -87,13 +108,15 @@ export async function importRegions(opts: {
     rows.push({ regionId: id, name, geometry: JSON.stringify(feature.geometry), properties: props });
   });
 
-  const uploadId = opts.uploadedBy
-    ? (
-        await prisma.regionUpload.create({
-          data: { level, filename: opts.filename, uploadedBy: opts.uploadedBy, status: 'processing' },
-        })
-      ).id
-    : null;
+  const uploadId =
+    opts.existingUploadId ??
+    (opts.uploadedBy
+      ? (
+          await prisma.regionUpload.create({
+            data: { level, filename: opts.filename, uploadedBy: opts.uploadedBy, status: 'processing' },
+          })
+        ).id
+      : null);
 
   if (errors.length > 0 || rows.length === 0) {
     const note = errors.length ? errors.slice(0, 20).join('; ') : 'Tidak ada fitur valid';

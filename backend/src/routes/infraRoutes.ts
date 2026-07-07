@@ -5,6 +5,7 @@ import { photoUpload, assertIsImage } from '../middlewares/upload';
 import { ok, created } from '../lib/respond';
 import { approvalSchema, createInfraSchema, updateInfraSchema } from '../schemas';
 import * as infraService from '../services/infraService';
+import * as auditService from '../services/auditService';
 
 export const infraRoutes = Router();
 
@@ -43,6 +44,7 @@ infraRoutes.post('/infrastructures', photoUpload.single('photo'), async (req, re
     const body = createInfraSchema.parse(req.body);
     if (req.file) await assertIsImage(req.file.buffer);
     const { infra, warning } = await infraService.createInfrastructure(req.user!, body, req.file?.buffer);
+    auditService.record(req.user, 'create', 'infrastructure', infra.id, { name: infra.name });
     created(res, infra, warning ? { warning } : undefined);
   } catch (err) {
     next(err);
@@ -53,7 +55,9 @@ infraRoutes.put('/infrastructures/:id', photoUpload.single('photo'), async (req,
   try {
     const body = updateInfraSchema.parse(req.body);
     if (req.file) await assertIsImage(req.file.buffer);
-    ok(res, await infraService.updateInfrastructure(req.params.id, req.user!, body, req.file?.buffer));
+    const updated = await infraService.updateInfrastructure(req.params.id, req.user!, body, req.file?.buffer);
+    auditService.record(req.user, 'update', 'infrastructure', req.params.id, { name: updated.name });
+    ok(res, updated);
   } catch (err) {
     next(err);
   }
@@ -62,6 +66,7 @@ infraRoutes.put('/infrastructures/:id', photoUpload.single('photo'), async (req,
 infraRoutes.delete('/infrastructures/:id', async (req, res, next) => {
   try {
     await infraService.deleteInfrastructure(req.params.id, req.user!);
+    auditService.record(req.user, 'delete', 'infrastructure', req.params.id);
     ok(res, { message: 'Infrastruktur dihapus' });
   } catch (err) {
     next(err);
@@ -94,7 +99,12 @@ infraRoutes.get('/admin/infrastructures', requireRole('admin'), async (req, res,
 infraRoutes.put('/admin/infrastructures/:id/approval', requireRole('admin'), async (req, res, next) => {
   try {
     const body = approvalSchema.parse(req.body);
-    ok(res, await infraService.setApprovalStatus(req.params.id, body.status));
+    const updated = await infraService.setApprovalStatus(req.params.id, body.status, body.note);
+    auditService.record(req.user, body.status === 'approved' ? 'approve' : body.status === 'rejected' ? 'reject' : 'reset-approval', 'infrastructure', req.params.id, {
+      name: updated.name,
+      ...(body.note ? { note: body.note } : {}),
+    });
+    ok(res, updated);
   } catch (err) {
     next(err);
   }

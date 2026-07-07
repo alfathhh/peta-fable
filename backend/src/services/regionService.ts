@@ -54,18 +54,45 @@ export async function getRegionOptions(level: string, parent: string | undefined
   });
 }
 
-/** Cari wilayah by nama / id, semua level, maks 20 hasil. */
+/**
+ * Cari wilayah by nama / id, semua level, maks 20 hasil.
+ * Nama dicari via full-text (memakai index GIN to_tsvector — DATABASE §2.2)
+ * dengan prefix match per kata; id dicari via prefix (index varchar_pattern_ops).
+ */
 export async function searchRegions(q: string) {
   const query = q.trim();
   if (!query) return [];
-  const rows = await prisma.region.findMany({
-    where: {
-      OR: [{ name: { contains: query, mode: 'insensitive' } }, { regionId: { startsWith: query } }],
-    },
-    select: { regionId: true, level: true, name: true, bbox: true, parentId: true },
-    orderBy: { regionId: 'asc' },
-    take: 20,
-  });
+
+  interface Row {
+    regionId: string;
+    level: string;
+    name: string;
+    bbox: unknown;
+    parentId: string | null;
+  }
+
+  let rows: Row[];
+  if (/^\d+$/.test(query)) {
+    rows = await prisma.$queryRaw<Row[]>`
+      SELECT region_id AS "regionId", level, name, bbox, parent_id AS "parentId"
+      FROM regions WHERE region_id LIKE ${query + '%'}
+      ORDER BY region_id LIMIT 20;
+    `;
+  } else {
+    // "korong kas" → to_tsquery 'korong & kas:*' — tiap kata harus cocok, kata terakhir prefix
+    const words = query
+      .split(/\s+/)
+      .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
+      .filter(Boolean);
+    if (words.length === 0) return [];
+    const tsquery = words.map((w) => `${w}:*`).join(' & ');
+    rows = await prisma.$queryRaw<Row[]>`
+      SELECT region_id AS "regionId", level, name, bbox, parent_id AS "parentId"
+      FROM regions
+      WHERE to_tsvector('simple', name) @@ to_tsquery('simple', ${tsquery})
+      ORDER BY region_id LIMIT 20;
+    `;
+  }
 
   // path_name: rangkai nama parent ("Korong Kasai, Katapiang, Batang Anai")
   const parentIds = new Set<string>();
@@ -92,6 +119,37 @@ export async function searchRegions(q: string) {
     }
     return { region_id: r.regionId, level: r.level, name: r.name, path_name: path.join(', '), bbox: r.bbox };
   });
+}
+
+const STATS_COLUMN: Record<string, 'idkab' | 'idkec' | 'iddesa' | 'idsls' | 'idsubsls'> = {
+  kab: 'idkab',
+  kec: 'idkec',
+  desa: 'iddesa',
+  sls: 'idsls',
+  subsls: 'idsubsls',
+};
+
+/**
+ * Jumlah infrastruktur (approved) per wilayah pada satu level — untuk choropleth.
+ * Memakai kolom id denormalisasi di infrastructures, tanpa join spasial.
+ */
+export async function getRegionStats(level: string, parent: string | undefined, categoryIds: string[]) {
+  assertLevel(level);
+  const col = STATS_COLUMN[level]!;
+  const where = {
+    deletedAt: null,
+    approvalStatus: 'approved',
+    ...(categoryIds.length ? { categoryId: { in: categoryIds } } : {}),
+    [col]: parent ? { startsWith: parent, not: null } : { not: null },
+  };
+  const grouped = await prisma.infrastructure.groupBy({
+    by: [col],
+    where,
+    _count: { _all: true },
+  });
+  return grouped
+    .map((g) => ({ region_id: g[col] as string | null, count: g._count._all }))
+    .filter((g): g is { region_id: string; count: number } => !!g.region_id);
 }
 
 /** Detail 1 wilayah + statistik jumlah infrastruktur per kategori. */

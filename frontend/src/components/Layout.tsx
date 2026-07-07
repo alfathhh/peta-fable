@@ -3,6 +3,7 @@ import { LogOut, Map, FolderKanban, KeyRound, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { ToastContainer } from './ui';
+import { ErrorBoundary } from './ErrorBoundary';
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
@@ -32,6 +33,7 @@ export function Layout() {
       {user?.role === 'admin' && (
         <>
           {[
+            ['/admin/dashboard', 'Dashboard'],
             ['/admin/pengguna', 'Pengguna'],
             ['/admin/kategori', 'Kategori'],
             ['/admin/kegiatan', 'Kegiatan & Token'],
@@ -39,6 +41,7 @@ export function Layout() {
             ['/admin/proyek', 'Proyek'],
             ['/admin/wilayah', 'Data Wilayah'],
             ['/admin/import-export', 'Import/Export'],
+            ['/admin/audit', 'Audit Log'],
           ].map(([to, label]) => (
             <NavLink key={to} to={to} className={navClass} onClick={() => setMenuOpen(false)}>
               {label}
@@ -80,7 +83,9 @@ export function Layout() {
         <nav className="z-[1000] flex flex-col gap-1 border-b bg-white p-3 lg:hidden">{links}</nav>
       )}
       <main className="min-h-0 flex-1">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

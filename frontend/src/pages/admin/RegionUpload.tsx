@@ -30,14 +30,31 @@ export default function AdminRegionUpload() {
     void load();
   }, []);
 
+  /** Upload dibalas cepat (processing) lalu status di-poll — file besar tidak memblokir. */
   async function submit() {
     if (!file) return;
     setUploading(true);
     try {
-      await regionApi.adminUpload(level, file);
-      toast.success(`Data wilayah level ${level} berhasil di-replace`);
+      const res = (await regionApi.adminUpload(level, file)) as { upload_id: string; status: string };
+      toast.success('File diterima — sedang diproses di server...');
       setFile(null);
       void load();
+      const uploadId = res.upload_id;
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const rows = (await regionApi.adminUploads()) as UploadRow[];
+        setHistory(rows);
+        const row = rows.find((h) => h.id === uploadId);
+        if (row?.status === 'done') {
+          toast.success(`Data wilayah level ${level} berhasil di-replace (${row.featureCount ?? row.feature_count} fitur)`);
+          return;
+        }
+        if (row?.status === 'failed') {
+          toast.error(`Import gagal: ${row.note ?? 'lihat riwayat'}`);
+          return;
+        }
+      }
+      toast.warning('Masih diproses — pantau status di tabel riwayat.');
     } catch (err) {
       toast.error(apiErrorMessage(err));
       void load();
