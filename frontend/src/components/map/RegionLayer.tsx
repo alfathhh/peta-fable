@@ -45,12 +45,18 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
     for (const layer of layersRef.current) layer.remove();
     layersRef.current = [];
 
-    const zoom = map.getZoom();
-    const detail: 'low' | 'high' = zoom >= 14 ? 'high' : 'low';
-
     // parent & level anak yang dirender: tanpa wilayah aktif = kecamatan se-kabupaten
     const parentId = activeRegion?.region_id ?? '1306';
     const childLevel = activeRegion ? childLevelOf(activeRegion.level) : 'kec';
+
+    // detail=high hanya berguna (dan hanya diminta) untuk level granular —
+    // poligon kab/kec sudah besar & jarang butuh presisi penuh walau zoom dalam
+    // (edge case nyata: wilayah aktif kabupaten dari hasil search + zoom>=14
+    // sempat memicu fetch 17 kecamatan resolusi penuh, ~670KB/430ms).
+    const zoom = map.getZoom();
+    const zoomIsDeep = zoom >= 14;
+    const detailFor = (level: string): 'low' | 'high' => (zoomIsDeep && (level === 'sls' || level === 'subsls') ? 'high' : 'low');
+    const detail = activeRegion ? detailFor(activeRegion.level) : 'low';
 
     async function render() {
       try {
@@ -95,7 +101,7 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
             : { ...BASE_STYLE, fillColor: colorFor(count, buckets), fillOpacity: 0.65 };
         };
 
-        const childFc = await regionApi.geojson(childLevel, parentId, detail);
+        const childFc = await regionApi.geojson(childLevel, parentId, detailFor(childLevel));
         if (cancelled || !map) return;
         const childLayer = L.geoJSON(childFc, {
           style: (feature) => styleFor((feature?.properties as { region_id: string }).region_id),
