@@ -33,6 +33,11 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # WAJIB eksplisit — @prisma/client tidak selalu auto-generate lewat
+      # postinstall di monorepo workspaces; tanpa ini Prisma Client jatuh ke
+      # tipe lemah ({}) dan typecheck gagal (Property 'x' does not exist on '{}').
+      - run: npx prisma generate
+        working-directory: backend
       - run: npx prisma migrate deploy
         working-directory: backend
       - run: npm run lint --workspace=backend

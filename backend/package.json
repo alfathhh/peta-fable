@@ -5,6 +5,7 @@
   "type": "module",
   "description": "API Peta Tematik Kabupaten Padang Pariaman",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "tsx watch src/index.ts",
     "build": "tsc --noEmit",
     "start": "tsx src/index.ts",
