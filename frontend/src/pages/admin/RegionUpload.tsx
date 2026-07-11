@@ -66,7 +66,11 @@ export default function AdminRegionUpload() {
 
   async function deleteLevel() {
     const label = LEVEL_LABELS[level];
-    if (!confirm(`Hapus SEMUA data wilayah level ${label}? Tindakan ini tidak dapat dibatalkan.`)) return;
+    if (
+      !confirm(
+        `Hapus SEMUA poligon wilayah level ${label}? Proyek dan titik infrastruktur tetap tersimpan, tetapi tampilan dan resolve wilayah level ini tidak tersedia sampai data di-upload ulang.`,
+      )
+    ) return;
     setDeleting(true);
     try {
       const result = await regionApi.adminDeleteLevel(level);

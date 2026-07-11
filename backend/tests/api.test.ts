@@ -716,23 +716,35 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     });
   });
 
-  it('hapus wilayah hanya admin dan menolak level yang masih direferensikan', async () => {
+  it('hapus wilayah hanya admin tanpa menghapus level anak, proyek, atau infrastruktur', async () => {
     expect((await request.delete('/api/admin/regions/kec')).status).toBe(401);
     expect(
       (await request.delete('/api/admin/regions/kec').set('Authorization', `Bearer ${petugasToken}`)).status,
     ).toBe(403);
 
-    const blocked = await request.delete('/api/admin/regions/kec').set('Authorization', `Bearer ${adminToken}`);
-    expect(blocked.status).toBe(409);
-    expect(blocked.body.message).toContain('desa terlebih dahulu');
-
     const { prisma } = await import('../src/lib/prisma');
-    await prisma.region.create({
-      data: { regionId: '1306010001000001', level: 'subsls', name: 'Sub-SLS untuk dihapus', parentId: '13060100010000' },
-    });
-    const deleted = await request.delete('/api/admin/regions/subsls').set('Authorization', `Bearer ${adminToken}`);
+    const infrastructureCount = await prisma.infrastructure.count();
+    const projectCount = await prisma.project.count();
+    const villageCount = await prisma.region.count({ where: { level: 'desa' } });
+    const deleted = await request.delete('/api/admin/regions/kec').set('Authorization', `Bearer ${adminToken}`);
     expect(deleted.status).toBe(200);
-    expect(deleted.body.data).toMatchObject({ level: 'subsls', deleted: 1 });
-    expect(await prisma.region.count({ where: { level: 'subsls' } })).toBe(0);
+    expect(deleted.body.data).toMatchObject({ level: 'kec', deleted: 1 });
+    expect(await prisma.region.count({ where: { level: 'kec' } })).toBe(0);
+    expect(await prisma.region.count({ where: { level: 'desa' } })).toBe(villageCount);
+    expect(await prisma.project.count()).toBe(projectCount);
+    expect(await prisma.infrastructure.count()).toBe(infrastructureCount);
+  });
+
+  it('hapus polygon kabupaten tidak menghapus kecamatan atau infrastruktur', async () => {
+    const { prisma } = await import('../src/lib/prisma');
+    const infrastructureCount = await prisma.infrastructure.count();
+    const kecamatanCount = await prisma.region.count({ where: { level: 'kec' } });
+
+    const deleted = await request.delete('/api/admin/regions/kab').set('Authorization', `Bearer ${adminToken}`);
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.data).toMatchObject({ level: 'kab', deleted: 1 });
+    expect(await prisma.region.count({ where: { level: 'kab' } })).toBe(0);
+    expect(await prisma.region.count({ where: { level: 'kec' } })).toBe(kecamatanCount);
+    expect(await prisma.infrastructure.count()).toBe(infrastructureCount);
   });
 });
