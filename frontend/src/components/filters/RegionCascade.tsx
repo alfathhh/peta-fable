@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Select } from '../ui';
 import { regionApi } from '../../api/resources';
-import { LEVEL_LABELS, LEVELS, type RegionLevel } from '../../utils/regionId';
+import { LEVEL_LABELS, LEVELS, LEVEL_TO_LENGTH, levelOf, type RegionLevel } from '../../utils/regionId';
 import type { RegionOption } from '../../types';
 
 const CASCADE_LEVELS: RegionLevel[] = ['kec', 'desa', 'sls', 'subsls'];
@@ -13,10 +13,13 @@ const CASCADE_LEVELS: RegionLevel[] = ['kec', 'desa', 'sls', 'subsls'];
 export function RegionCascade({
   onChange,
   minLevel,
+  value,
 }: {
   onChange: (selection: { region_id: string; level: RegionLevel; name: string } | null) => void;
   /** untuk form proyek: level minimal yang dianggap valid (mis. 'kec') */
   minLevel?: RegionLevel;
+  /** Sinkronkan dropdown saat wilayah aktif berubah dari klik shape/search. */
+  value?: string | null;
 }) {
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<Record<string, RegionOption[]>>({});
@@ -25,6 +28,32 @@ export function RegionCascade({
   useEffect(() => {
     regionApi.options('kec', '1306').then((opts) => setOptions((o) => ({ ...o, kec: opts }))).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (value === undefined) return;
+    const activeLevel = value ? levelOf(value) : null;
+    if (!value || !activeLevel || activeLevel === 'kab') {
+      setSelected({});
+      return;
+    }
+
+    const activeIdx = CASCADE_LEVELS.indexOf(activeLevel);
+    const nextSelected: Record<string, string> = {};
+    for (let i = 0; i <= activeIdx; i++) {
+      const level = CASCADE_LEVELS[i];
+      nextSelected[level] = value.slice(0, LEVEL_TO_LENGTH[level]);
+    }
+    setSelected(nextSelected);
+
+    for (let i = 1; i <= Math.min(activeIdx + 1, CASCADE_LEVELS.length - 1); i++) {
+      const level = CASCADE_LEVELS[i];
+      const parentLevel = CASCADE_LEVELS[i - 1];
+      const parentId = nextSelected[parentLevel];
+      if (parentId) {
+        regionApi.options(level, parentId).then((opts) => setOptions((o) => ({ ...o, [level]: opts }))).catch(() => {});
+      }
+    }
+  }, [value]);
 
   async function handleSelect(level: RegionLevel, regionId: string) {
     const id = ++requestId.current;

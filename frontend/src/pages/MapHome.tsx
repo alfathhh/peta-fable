@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Layers, LocateFixed, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowLeft, Layers, LocateFixed, SlidersHorizontal, X } from 'lucide-react';
 import { MapContainer } from '../components/map/MapContainer';
 import { RegionLayer } from '../components/map/RegionLayer';
 import { InfraMarkers } from '../components/map/InfraMarkers';
@@ -13,6 +13,7 @@ import { regionApi } from '../api/resources';
 import { getCategoryIcon } from '../config/categoryIcons';
 import { toast } from '../stores/toastStore';
 import type { RegionDetail } from '../types';
+import { levelOf, parentOf } from '../utils/regionId';
 
 function LocateButton({ onClick }: { onClick: () => void }) {
   return (
@@ -105,10 +106,32 @@ export default function MapHome() {
   const [basemap, setBasemap] = useState<BasemapKey>('street');
   const [panelOpen, setPanelOpen] = useState(false);
   const [locate, setLocate] = useState(false);
+  const activeRegion = useMapStore((s) => s.activeRegion);
   const setActiveRegion = useMapStore((s) => s.setActiveRegion);
   const choropleth = useMapStore((s) => s.choropleth);
   const setChoropleth = useMapStore((s) => s.setChoropleth);
   const regionRequestRef = useRef(0);
+
+  function goBackRegion() {
+    if (!activeRegion) return;
+    const parentId = parentOf(activeRegion.region_id);
+    const requestId = ++regionRequestRef.current;
+    if (!parentId || parentId.length === 4) {
+      setActiveRegion(null);
+      return;
+    }
+    const parentLevel = levelOf(parentId);
+    if (!parentLevel) return;
+    regionApi.detail(parentId).then((d) => {
+      if (requestId !== regionRequestRef.current) return;
+      setActiveRegion({
+        region_id: d.region_id,
+        level: parentLevel,
+        name: d.name,
+        bbox: d.bbox,
+      });
+    }).catch(() => toast.error('Gagal kembali ke wilayah induk'));
+  }
 
   return (
     <div className="relative h-full">
@@ -143,6 +166,15 @@ export default function MapHome() {
       >
         <SlidersHorizontal className="h-4 w-4 text-blue-600" /> Filter
       </button>
+      {activeRegion && (
+        <button
+          onClick={goBackRegion}
+          className="absolute left-[7rem] top-3 z-[1000] flex items-center gap-2 rounded-lg bg-white px-3 py-2.5 text-sm font-medium shadow-md hover:bg-gray-50"
+          title="Kembali ke wilayah induk"
+        >
+          <ArrowLeft className="h-4 w-4 text-blue-600" /> Kembali
+        </button>
+      )}
 
       {panelOpen && (
         <div className="absolute inset-x-0 bottom-0 z-[1001] max-h-[70vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl sm:inset-x-auto sm:left-3 sm:top-16 sm:bottom-auto sm:w-80 sm:rounded-2xl">
@@ -157,6 +189,7 @@ export default function MapHome() {
             <div>
               <h3 className="mb-2 text-xs font-semibold uppercase text-gray-500">Wilayah</h3>
               <RegionCascade
+                value={activeRegion?.region_id ?? null}
                 onChange={(sel) => {
                   const requestId = ++regionRequestRef.current;
                   if (!sel) {

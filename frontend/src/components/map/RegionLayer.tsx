@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { useMap } from './MapContainer';
+import { KAB_BOUNDS, useMap } from './MapContainer';
 import { regionApi } from '../../api/resources';
 import { useMapStore } from '../../stores/mapStore';
 import { childLevelOf, levelOf, type RegionLevel } from '../../utils/regionId';
@@ -130,7 +130,12 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
 
   // zoom ke bbox wilayah aktif saat berubah
   useEffect(() => {
-    if (!map || !activeRegion?.bbox) return;
+    if (!map) return;
+    if (!activeRegion) {
+      map.fitBounds(KAB_BOUNDS);
+      return;
+    }
+    if (!activeRegion.bbox) return;
     const [minLng, minLat, maxLng, maxLat] = activeRegion.bbox;
     map.fitBounds(L.latLngBounds([minLat, minLng], [maxLat, maxLng]), { padding: [24, 24] });
   }, [map, activeRegion]);
