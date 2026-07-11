@@ -94,8 +94,9 @@ npm run lint && npm run typecheck
     atau membuat endpoint geojson tanpa middleware `auth`. Semua respons geojson
     (`/regions*`, `/layers/{id}/geojson`) wajib `Cache-Control: private, no-store`.
     File mentah di `data/` tidak boleh di-commit ke repo publik.
-12. Keputusan PO yang mengikat (lihat `DECISIONS.md`): wilayah proyek **minimal
-    level `desa`** (kab/kec → 422); infrastruktur **maksimal 1 foto**
+12. Keputusan PO yang mengikat (lihat `DECISIONS.md` #13): wilayah proyek adalah
+    tepat satu master wilayah level `kec`/`desa`/`sls`/`subsls` (`kab` → 422);
+    master wilayah otomatis menjadi outline + target `fitBounds`; infrastruktur **maksimal 1 foto**
     (`photo_path` di tabel infrastruktur); titik di luar wilayah proyek
     **tetap disimpan** dengan flag `is_outside_region=true` + warning.
 

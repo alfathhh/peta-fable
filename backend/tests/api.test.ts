@@ -81,6 +81,17 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(JSON.parse(res.text).type).toBe('FeatureCollection');
   });
 
+  it('GET /regions dengan parent berlevel sama hanya mengirim wilayah yang dipilih', async () => {
+    const res = await request
+      .get('/api/regions?level=kec&parent=1306010&detail=high')
+      .set('Authorization', `Bearer ${petugasToken}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, no-store');
+    const body = JSON.parse(res.text);
+    expect(body.features).toHaveLength(1);
+    expect(body.features[0].properties).toMatchObject({ region_id: '1306010', level: 'kec' });
+  });
+
   it('wilayah granular wajib memiliki parent langsung', async () => {
     const villages = await request.get('/api/regions?level=desa').set('Authorization', `Bearer ${adminToken}`);
     expect(villages.status).toBe(422);
@@ -159,19 +170,30 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(double.status).toBe(409);
   });
 
-  it('proyek level kec → 422; level desa → 201', async () => {
+  it('proyek level kab → 422; level kec → 201 dan detail mempertahankan wilayah', async () => {
     const bad = await request
       .post('/api/my/projects')
       .set('Authorization', `Bearer ${petugasToken}`)
-      .send({ name: 'Salah', activity_id: activityId, region_id: '1306010' });
+      .send({ name: 'Salah', activity_id: activityId, region_id: '1306' });
     expect(bad.status).toBe(422);
 
     const good = await request
       .post('/api/my/projects')
       .set('Authorization', `Bearer ${petugasToken}`)
-      .send({ name: 'Proyek Desa', activity_id: activityId, region_id: '1306010001' });
+      .send({ name: 'Proyek Kecamatan', activity_id: activityId, region_id: '1306010' });
     expect(good.status).toBe(201);
+    expect(good.body.data).toMatchObject({ regionId: '1306010', regionLevel: 'kec' });
     projectId = good.body.data.id;
+
+    const detail = await request
+      .get(`/api/my/projects/${projectId}`)
+      .set('Authorization', `Bearer ${petugasToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data).toMatchObject({
+      regionId: '1306010',
+      regionLevel: 'kec',
+      region: { regionId: '1306010', level: 'kec' },
+    });
   });
 
   it('petugas tambah infrastruktur — resolve wilayah & flag outside', async () => {

@@ -15,7 +15,7 @@ export function RegionCascade({
   minLevel,
 }: {
   onChange: (selection: { region_id: string; level: RegionLevel; name: string } | null) => void;
-  /** untuk form proyek: level minimal yang dianggap valid (mis. 'desa') */
+  /** untuk form proyek: level minimal yang dianggap valid (mis. 'kec') */
   minLevel?: RegionLevel;
 }) {
   const [selected, setSelected] = useState<Record<string, string>>({});

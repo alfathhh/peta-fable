@@ -36,7 +36,7 @@ Yang wajib dilindungi auth adalah **data wilayah & layer** (§3, §7.1), bukan b
 
 | Method | Endpoint | Akses | Keterangan |
 |---|---|---|---|
-| GET | `/regions` | login | Query: `level` (wajib), `parent`, `detail=low\|high` (default `low`). Untuk level granular (`desa`/`sls`/`subsls`) `parent` **wajib**: parent langsung, ATAU id level yang sama untuk mengambil 1 polygon outline (tanpa parent → 422, anti-dump massal). Response: **GeoJSON FeatureCollection** |
+| GET | `/regions` | login | Query: `level` (wajib), `parent`, `detail=low\|high` (default `low`). `parent` berupa parent langsung mengambil daftar anak; `parent` berupa ID dengan level sama mengambil **tepat satu polygon** untuk outline wilayah terpilih, termasuk level `kec`. Untuk level granular (`desa`/`sls`/`subsls`), tanpa `parent` → 422 (anti-dump massal). Response: **GeoJSON FeatureCollection** |
 | GET | `/regions/{region_id}` | login | Detail 1 wilayah + bbox + statistik ringkas (jumlah infra **approved** per kategori, dengan icon & color kategori) |
 | GET | `/regions/search?q=` | login | Cari by nama/id, semua level. Response: array `{region_id, level, name, path_name, bbox}` — `path_name` contoh: "Korong Kasai, Katapiang, Batang Anai". Maks 20 hasil |
 | GET | `/regions/options?level=&parent=` | login | Versi ringan untuk dropdown (tanpa geometri): `[{region_id, name}]`, sorted by `region_id`. Level granular wajib `parent` langsung (kec→desa, desa→sls, sls→subsls) |
@@ -101,8 +101,8 @@ GET /api/regions?level=sls&parent=1306010001&detail=low
 | Method | Endpoint | Akses | Keterangan |
 |---|---|---|---|
 | GET | `/my/projects` | P | daftar proyek milik user |
-| POST | `/my/projects` | P | `{name, activity_id, region_id}` — `activity_id` harus hasil klaim user **dengan token yang masih aktif & belum kedaluwarsa** (DECISIONS #11); `region_id` **minimal level desa** (`desa`\|`sls`\|`subsls`); level `kab`/`kec` → 422 |
-| GET | `/my/projects/{id}` | P (miliknya) | detail + bbox wilayah + daftar layer |
+| POST | `/my/projects` | P | `{name, activity_id, region_id}` — `activity_id` harus hasil klaim user **dengan token yang masih aktif & belum kedaluwarsa** (DECISIONS #11); `region_id` wajib tepat satu master wilayah level `kec`\|`desa`\|`sls`\|`subsls`; level `kab` → 422 |
+| GET | `/my/projects/{id}` | P (miliknya) | detail mempertahankan `regionId` + `regionLevel`, menyertakan bbox/detail master wilayah dan daftar layer; FE mengambil exact-region GeoJSON untuk outline + `fitBounds` |
 | PUT/DELETE | `/my/projects/{id}` | P (miliknya) | |
 | GET | `/admin/projects` | A | semua proyek + filter user/kegiatan/wilayah |
 | PUT/DELETE | `/admin/projects/{id}` | A | project management admin |

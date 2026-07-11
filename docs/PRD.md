@@ -1,6 +1,7 @@
 # PRD — Aplikasi Web Peta Tematik Kabupaten Padang Pariaman
 
-> **Product Requirements Document** · Versi 1.2 · Juli 2026
+> **Product Requirements Document** · Versi 1.3 · Juli 2026
+> Perubahan v1.3 (keputusan PO #13): proyek memilih tepat satu master wilayah level kecamatan sampai sub-SLS; kabupaten ditolak; wilayah pilihan otomatis menjadi outline dan target fitBounds; upload layer tetap opsional.
 > Perubahan v1.2 (keputusan PO, lihat `DECISIONS.md`): proyek minimal level desa, infrastruktur maks 1 foto, titik di luar wilayah = simpan+flag, basemap XYZ Google langsung, tanpa mode offline, **GeoJSON tidak boleh publik**.
 > Perubahan v1.1: role disederhanakan menjadi 2 (admin & petugas), stack full JavaScript/TypeScript, penegasan ikon per kategori.
 > Dokumen ini ditulis untuk junior developer. Baca pelan-pelan, semua istilah dijelaskan.
@@ -52,7 +53,7 @@ Hanya ada **2 peran**: `admin` dan `petugas` (di brief disebut "user").
 - Lihat peta default + infrastruktur (sesuai aturan tampil di bagian 5.4).
 - **Klaim token kegiatan**: memasukkan token 7 karakter → kegiatan itu jadi tersedia untuknya.
 - Buat **proyek kegiatan**:
-  - Pilih wilayah lewat dropdown berjenjang: Kecamatan → Desa/Nagari → SLS → Sub-SLS (kecamatan hanya untuk mempersempit pilihan). **Wilayah proyek minimal level desa/nagari** — boleh desa, SLS, atau sub-SLS; kabupaten & kecamatan tidak bisa dipilih sebagai wilayah proyek.
+  - Pilih **tepat satu master wilayah** lewat dropdown berjenjang: Kecamatan → Desa/Nagari → SLS → Sub-SLS. Level yang boleh disimpan adalah kecamatan, desa, SLS, atau sub-SLS; kabupaten tidak bisa dipilih sebagai wilayah proyek.
   - Isi nama proyek.
   - Pilih nama kegiatan (dropdown, hanya dari token yang sudah ia klaim & belum kedaluwarsa).
 - Di dalam proyek:
@@ -159,14 +160,14 @@ Implementasi: GeoJSON di-import ke database (PostGIS) sebagai sumber kebenaran, 
 - Form buat proyek:
   - **Nama proyek** (teks bebas).
   - **Kegiatan** (dropdown dari token yang sudah diklaim & masih berlaku).
-  - **Wilayah** (dropdown berjenjang mulai dari kecamatan untuk mempersempit, tapi yang boleh disimpan sebagai wilayah proyek **minimal level desa/nagari**: desa, SLS, atau sub-SLS. Backend menolak level kab/kec dengan 422).
+  - **Wilayah** (tepat satu pilihan dari dropdown berjenjang: kecamatan, desa, SLS, atau sub-SLS. Backend menolak level kabupaten dengan 422).
 - Halaman proyek = peta yang:
-  - Auto-zoom ke wilayah proyek + outline wilayahnya.
+  - Master wilayah terpilih otomatis menjadi outline proyek dan target `fitBounds`, diambil dari API GeoJSON wilayah terautentikasi dengan filter level + ID yang menghasilkan tepat satu feature.
   - Menampilkan **lokasi GPS user saat ini** (dot biru, update berkala).
   - Panel **layer proyek** (5.8) dan tombol **"+ Infrastruktur"** (5.9).
 
 ### 5.8 Layer Upload di Proyek (GeoJSON/Shapefile)
-- Petugas bisa upload file **GeoJSON** (`.geojson`/`.json`) atau **Shapefile** (`.zip` berisi .shp+.dbf+.shx+.prj) — maksimal level sub-SLS, ukuran maks 20 MB.
+- Upload layer tambahan bersifat **opsional** karena outline master wilayah selalu tersedia otomatis. Petugas bisa upload file **GeoJSON** (`.geojson`/`.json`) atau **Shapefile** (`.zip` berisi .shp+.dbf+.shx+.prj) — maksimal level sub-SLS, ukuran maks 20 MB.
 - Shapefile dikonversi ke GeoJSON **di browser** memakai library `shpjs` (tidak membebani server).
 - Pengaturan tampilan per layer (disimpan ke DB agar persist):
   - Mode: **outline saja** atau **fill**.

@@ -17,10 +17,11 @@
 | 10 | Jul 2026 | **Fitur pendukung admin disetujui**: dashboard ringkasan, audit log aksi penting (approve/reject/CRUD user·kategori·token/upload wilayah/import), export "data saya" untuk petugas, choropleth jumlah infrastruktur, dan alasan penolakan ACC. | dashboardService · auditService · `/my/export/infrastructures` · `/regions/stats` |
 | 11 | Jul 2026 | **Membuat proyek mensyaratkan token klaim yang masih aktif & belum kedaluwarsa.** Klaim atas token yang kemudian mati/kedaluwarsa TIDAK lagi bisa dipakai membuat proyek baru (semula klaim berlaku permanen); proyek yang sudah terlanjur dibuat tetap berjalan. Konsisten dengan filter dropdown kegiatan di FE. | projectService `createProject` · AUDIT-VERIFIKASI temuan #3 |
 | 12 | 11 Jul 2026 | **Perubahan konten publik oleh petugas wajib melalui approval ulang.** Jika petugas mengubah nama, kategori, deskripsi, atau foto pada infrastruktur berstatus `approved` atau `rejected`, backend mengubah status menjadi `pending` dan mengosongkan `approval_note`. Edit oleh admin mempertahankan status dan catatan approval. Record yang sudah `pending` tetap `pending`. | DATABASE §2.9 & aturan #10 · `infraService.updateInfrastructure` |
+| 13 | 11 Jul 2026 | **Wilayah proyek adalah tepat satu master wilayah level `kec`, `desa`, `sls`, atau `subsls`; keputusan ini menggantikan #1.** Level `kab` tetap ditolak backend (422). Master wilayah terpilih otomatis menjadi outline proyek dan target `fitBounds` melalui API GeoJSON wilayah terautentikasi yang difilter ke ID tersebut. Upload GeoJSON/SHP tetap opsional sebagai layer tambahan. Pembuatan/tagging infrastruktur tetap hanya dari detail proyek, bukan peta utama. | PRD §3.2, §5.7–5.9 · API-SPEC §3, §7 · DATABASE §2.7 · TASKS 4.5–4.7, 5.1 · AGENTS/CLAUDE aturan #12 · `projectService`, `Projects`, `ProjectDetail` |
 
 ## Konsekuensi teknis ringkas (untuk junior)
 
-- Form proyek: tombol simpan disable sampai user memilih minimal desa.
+- Form proyek: tombol simpan disable sampai user memilih satu wilayah level kecamatan sampai sub-SLS.
 - Tidak ada lagi service tile session / proxy tiles di backend — basemap urusan frontend (config).
 - Tabel `infrastructure_photos` dan `tile_sessions` DIHAPUS dari skema (lihat DATABASE v1.2).
 - CI menambahkan pengecekan: hasil build FE tidak boleh mengandung FeatureCollection.

@@ -1,6 +1,6 @@
 # DATABASE.md — Skema Database
 
-> Versi 1.4. PostgreSQL 16 + PostGIS. ORM: **Prisma** — kolom geometry didefinisikan sebagai
+> Versi 1.5. PostgreSQL 16 + PostGIS. ORM: **Prisma** — kolom geometry didefinisikan sebagai
 > `Unsupported("geometry(...)")` di `schema.prisma`, dan index spasial/prefix dibuat
 > lewat **migration SQL manual** (Prisma migrate mendukung `--create-only` lalu edit SQL-nya).
 > Semua tabel punya `created_at`, `updated_at` (timestamp UTC).
@@ -120,7 +120,7 @@ Unique: `(user_id, activity_token_id)` → tidak bisa klaim 2x.
 | user_id | text FK users | pemilik (petugas) |
 | activity_id | text FK activities | dari token yang diklaim |
 | name | varchar(150) | nama proyek |
-| region_id | varchar(16) FK regions | wilayah proyek — **minimal level desa** (keputusan PO #1); validasi di service: level ∈ {`desa`,`sls`,`subsls`} |
+| region_id | varchar(16) FK regions | tepat satu master wilayah proyek (keputusan PO #13, menggantikan #1); validasi di service: level ∈ {`kec`,`desa`,`sls`,`subsls`}; `kab` ditolak |
 | region_level | varchar(10) | disalin, memudahkan filter |
 | status | varchar(20) default 'aktif' | `aktif` \| `selesai` \| `arsip` |
 | deleted_at | timestamp nullable | soft delete |

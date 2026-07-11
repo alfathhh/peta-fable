@@ -49,9 +49,9 @@
 - [ ] 4.2 CRUD admin `activity_tokens` (`lib/tokenGenerator.ts`, alfabet aman) + test unik & expired.
 - [ ] 4.3 Endpoint klaim token + rate limit + semua kasus error (expired/nonaktif/kuota/dobel, transaction atomik) + test.
 - [ ] 4.4 FE petugas: halaman "Kegiatan Saya" + form klaim token (pesan error jelas).
-- [ ] 4.5 Endpoint proyek (my/projects + admin/projects) + cek kepemilikan di service + validasi wilayah **minimal level desa** (kab/kec → 422) + test.
-- [ ] 4.6 FE form buat proyek: nama, dropdown kegiatan (hasil klaim), dropdown wilayah berjenjang (kec → desa → sls → subsls); tombol simpan aktif hanya jika terpilih **minimal level desa**.
-- [ ] 4.7 FE halaman detail proyek: peta zoom ke wilayah + outline + lokasi GPS live (`watchPosition`, dot biru + lingkaran akurasi).
+- [ ] 4.5 Endpoint proyek (my/projects + admin/projects) + cek kepemilikan di service + validasi tepat satu master wilayah level kec/desa/sls/subsls (`kab` → 422) + test.
+- [ ] 4.6 FE form buat proyek: nama, dropdown kegiatan (hasil klaim), dropdown tepat satu wilayah berjenjang (kec → desa → sls → subsls); pilihan kecamatan sudah valid untuk menyimpan.
+- [ ] 4.7 FE halaman detail proyek: exact-region GeoJSON master otomatis menjadi outline + target `fitBounds`; tampilkan lokasi GPS live (`watchPosition`, dot biru + lingkaran akurasi). Upload GeoJSON/SHP tetap opsional.
 
 ## Milestone 5 — Add Infrastruktur oleh Petugas (Minggu 7)
 
@@ -90,7 +90,7 @@
 
 | # | Pertanyaan | Keputusan |
 |---|---|---|
-| 1 | Level minimal wilayah proyek? | **Minimal level desa** (desa/sls/subsls; kab & kec ditolak) |
+| 1 | Level wilayah proyek? | **Tepat satu kec/desa/sls/subsls; kab ditolak** (keputusan #13 menggantikan #1) |
 | 2 | Infrastruktur boleh >1 foto? | **1 foto saja** (kolom `photo_path` langsung di tabel infrastruktur) |
 | 3 | Titik GPS di luar wilayah proyek? | **Simpan + flag** `is_outside_region` + peringatan di UI |
 | 4 | Basemap Google? | **Endpoint XYZ langsung** (`lyrs=m` street, `lyrs=y` hybrid), tanpa API key — risiko ToS diterima PO, siapkan fallback di config |

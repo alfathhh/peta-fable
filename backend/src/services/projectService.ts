@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { badRequest, notFound } from '../middlewares/errorHandler';
 
-const ALLOWED_LEVELS = ['desa', 'sls', 'subsls'];
+const ALLOWED_LEVELS = ['kec', 'desa', 'sls', 'subsls'];
 
 const includeBasic = {
   activity: { select: { id: true, name: true } },
@@ -46,12 +46,12 @@ export async function createProject(userId: string, input: { name: string; activ
     });
   }
 
-  // Wilayah proyek minimal level desa (keputusan PO #1)
+  // Satu master wilayah proyek; kabupaten terlalu luas untuk dipilih.
   const region = await regionInfo(input.region_id);
   if (!region) throw badRequest('Wilayah tidak ditemukan', { region_id: ['Wilayah tidak ditemukan'] });
   if (!ALLOWED_LEVELS.includes(region.level)) {
-    throw badRequest('Wilayah proyek minimal level desa/nagari', {
-      region_id: ['Pilih wilayah level desa, SLS, atau sub-SLS'],
+    throw badRequest('Wilayah proyek tidak boleh level kabupaten', {
+      region_id: ['Pilih wilayah level kecamatan, desa, SLS, atau sub-SLS'],
     });
   }
 

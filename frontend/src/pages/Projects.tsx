@@ -116,9 +116,9 @@ export default function Projects() {
           <div>
             <p className="mb-1 text-sm font-medium text-gray-700">Wilayah proyek</p>
             <p className="mb-2 text-xs text-gray-500">
-              Kecamatan hanya untuk mempersempit — wilayah proyek minimal level desa/nagari.
+              Pilih tepat satu kecamatan, desa/nagari, SLS, atau sub-SLS sebagai wilayah proyek.
             </p>
-            <RegionCascade minLevel="desa" onChange={setRegion} />
+            <RegionCascade minLevel="kec" onChange={setRegion} />
             {region && (
               <p className="mt-2 rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
                 Terpilih: {region.name} ({region.region_id})
