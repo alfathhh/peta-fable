@@ -105,6 +105,9 @@ export async function importRegions(opts: {
     if (id.length !== expectedLen) return errors.push(`Fitur #${i + 1}: panjang id "${id}" bukan ${expectedLen} digit`);
     if (!name) return errors.push(`Fitur #${i + 1}: properti nama (${NAME_KEYS[level][0]}) tidak ditemukan`);
     if (!feature.geometry) return errors.push(`Fitur #${i + 1}: geometry kosong`);
+    if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon') {
+      return errors.push(`Fitur #${i + 1}: geometry harus Polygon atau MultiPolygon, bukan ${feature.geometry.type}`);
+    }
     rows.push({ regionId: id, name, geometry: JSON.stringify(feature.geometry), properties: props });
   });
 

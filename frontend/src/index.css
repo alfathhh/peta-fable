@@ -46,6 +46,24 @@ body {
   display: none;
 }
 
+/* Nama master wilayah tampil permanen tanpa kotak tooltip Leaflet. */
+.region-label {
+  background: rgb(255 255 255 / 78%);
+  border: 0;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 20%);
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 5px;
+  pointer-events: none;
+  text-align: center;
+}
+.region-label::before {
+  display: none;
+}
+
 /* Dot lokasi GPS */
 .gps-dot {
   width: 14px;

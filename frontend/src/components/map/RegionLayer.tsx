@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { useMap } from './MapContainer';
 import { regionApi } from '../../api/resources';
@@ -36,18 +36,6 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
   const categoryFilter = useMapStore((s) => s.categoryFilter);
   const setChoroplethBuckets = useMapStore((s) => s.setChoroplethBuckets);
   const layersRef = useRef<L.GeoJSON[]>([]);
-  const [highDetailZoom, setHighDetailZoom] = useState(false);
-
-  useEffect(() => {
-    if (!map) return;
-    const updateDetail = () => setHighDetailZoom(map.getZoom() >= 14);
-    updateDetail();
-    map.on('zoomend', updateDetail);
-    return () => {
-      map.off('zoomend', updateDetail);
-    };
-  }, [map]);
-
   useEffect(() => {
     if (!map) return;
     let cancelled = false;
@@ -60,18 +48,11 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
     const parentId = activeRegion?.region_id ?? '1306';
     const childLevel = activeRegion ? childLevelOf(activeRegion.level) : 'kec';
 
-    // detail=high hanya berguna (dan hanya diminta) untuk level granular —
-    // poligon kab/kec sudah besar & jarang butuh presisi penuh walau zoom dalam
-    // (edge case nyata: wilayah aktif kabupaten dari hasil search + zoom>=14
-    // sempat memicu fetch 17 kecamatan resolusi penuh, ~670KB/430ms).
-    const detailFor = (level: string): 'low' | 'high' => (highDetailZoom && (level === 'sls' || level === 'subsls') ? 'high' : 'low');
-    const detail = activeRegion ? detailFor(activeRegion.level) : 'low';
-
     async function render() {
       try {
         if (activeRegion) {
           // outline wilayah aktif
-          const activeFc = await regionApi.geojson(activeRegion.level, activeRegion.region_id, detail);
+          const activeFc = await regionApi.geojson(activeRegion.level, activeRegion.region_id, 'high');
           if (cancelled || !map) return;
           const activeLayer = L.geoJSON(activeFc, { style: ACTIVE_STYLE, interactive: false }).addTo(map);
           layersRef.current.push(activeLayer);
@@ -104,7 +85,7 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
             : { ...BASE_STYLE, fillColor: colorFor(count, buckets), fillOpacity: 0.65 };
         };
 
-        const childFc = await regionApi.geojson(childLevel, parentId, detailFor(childLevel));
+        const childFc = await regionApi.geojson(childLevel, parentId, 'high');
         if (cancelled || !map) return;
         const childLayer = L.geoJSON(childFc, {
           style: (feature) => styleFor((feature?.properties as { region_id: string }).region_id),
@@ -125,7 +106,9 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
             });
             const count = countById.get(props.region_id);
             layer.bindTooltip(choropleth && count !== undefined ? `${props.name} — ${count} infrastruktur` : props.name, {
-              sticky: true,
+              permanent: true,
+              direction: 'center',
+              className: 'region-label',
             });
             layer.on('mouseover', () => (layer as L.Path).setStyle({ weight: 3 }));
             layer.on('mouseout', () => (layer as L.Path).setStyle(styleFor(props.region_id)));
@@ -143,7 +126,7 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
       for (const layer of layersRef.current) layer.remove();
       layersRef.current = [];
     };
-  }, [map, activeRegion, onSelect, setActiveRegion, choropleth, categoryFilter, setChoroplethBuckets, highDetailZoom]);
+  }, [map, activeRegion, onSelect, setActiveRegion, choropleth, categoryFilter, setChoroplethBuckets]);
 
   // zoom ke bbox wilayah aktif saat berubah
   useEffect(() => {
