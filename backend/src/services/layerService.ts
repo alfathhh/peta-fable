@@ -15,8 +15,7 @@ function isStoragePath(absolutePath: string): boolean {
 }
 
 export async function listLayers(projectId: string, user: { sub: string; role: string }) {
-  const project = await getOwnedProject(projectId, user);
-  await assertProjectWritable(project, user);
+  await getOwnedProject(projectId, user);
   return prisma.projectLayer.findMany({ where: { projectId }, orderBy: { sortOrder: 'asc' } });
 }
 
@@ -26,7 +25,8 @@ export async function createLayer(
   file: { buffer: Buffer; originalname: string },
   name?: string,
 ) {
-  await getOwnedProject(projectId, user);
+  const project = await getOwnedProject(projectId, user);
+  await assertProjectWritable(project, user);
 
   let parsed: { type?: string; features?: unknown[] };
   try {
