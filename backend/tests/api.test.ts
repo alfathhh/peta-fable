@@ -183,10 +183,10 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
       .send({ name: 'Proyek Kecamatan', activity_id: activityId, region_id: '1306010' });
     expect(good.status).toBe(201);
     expect(good.body.data).toMatchObject({ regionId: '1306010', regionLevel: 'kec' });
-    projectId = good.body.data.id;
+    const kecProjectId = good.body.data.id;
 
     const detail = await request
-      .get(`/api/my/projects/${projectId}`)
+      .get(`/api/my/projects/${kecProjectId}`)
       .set('Authorization', `Bearer ${petugasToken}`);
     expect(detail.status).toBe(200);
     expect(detail.body.data).toMatchObject({
@@ -194,6 +194,15 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
       regionLevel: 'kec',
       region: { regionId: '1306010', level: 'kec' },
     });
+
+    // Rangkaian test infrastruktur di bawah sengaja memakai cakupan desa agar
+    // tetap menguji titik yang berada di dalam kecamatan tetapi di luar desa.
+    const desaProject = await request
+      .post('/api/my/projects')
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .send({ name: 'Proyek Desa', activity_id: activityId, region_id: '1306010001' });
+    expect(desaProject.status).toBe(201);
+    projectId = desaProject.body.data.id;
   });
 
   it('petugas tambah infrastruktur — resolve wilayah & flag outside', async () => {
