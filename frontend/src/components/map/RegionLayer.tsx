@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { useMap } from './MapContainer';
 import { regionApi } from '../../api/resources';
@@ -36,6 +36,17 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
   const categoryFilter = useMapStore((s) => s.categoryFilter);
   const setChoroplethBuckets = useMapStore((s) => s.setChoroplethBuckets);
   const layersRef = useRef<L.GeoJSON[]>([]);
+  const [highDetailZoom, setHighDetailZoom] = useState(false);
+
+  useEffect(() => {
+    if (!map) return;
+    const updateDetail = () => setHighDetailZoom(map.getZoom() >= 14);
+    updateDetail();
+    map.on('zoomend', updateDetail);
+    return () => {
+      map.off('zoomend', updateDetail);
+    };
+  }, [map]);
 
   useEffect(() => {
     if (!map) return;
@@ -53,9 +64,7 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
     // poligon kab/kec sudah besar & jarang butuh presisi penuh walau zoom dalam
     // (edge case nyata: wilayah aktif kabupaten dari hasil search + zoom>=14
     // sempat memicu fetch 17 kecamatan resolusi penuh, ~670KB/430ms).
-    const zoom = map.getZoom();
-    const zoomIsDeep = zoom >= 14;
-    const detailFor = (level: string): 'low' | 'high' => (zoomIsDeep && (level === 'sls' || level === 'subsls') ? 'high' : 'low');
+    const detailFor = (level: string): 'low' | 'high' => (highDetailZoom && (level === 'sls' || level === 'subsls') ? 'high' : 'low');
     const detail = activeRegion ? detailFor(activeRegion.level) : 'low';
 
     async function render() {
@@ -140,7 +149,7 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
       for (const layer of layersRef.current) layer.remove();
       layersRef.current = [];
     };
-  }, [map, activeRegion, onSelect, setActiveRegion, choropleth, categoryFilter, setChoroplethBuckets]);
+  }, [map, activeRegion, onSelect, setActiveRegion, choropleth, categoryFilter, setChoroplethBuckets, highDetailZoom]);
 
   // zoom ke bbox wilayah aktif saat berubah
   useEffect(() => {

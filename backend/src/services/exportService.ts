@@ -29,6 +29,12 @@ async function buildSheet(module: ExportModule, filters: Record<string, string |
           ...(filters.user_id ? { userId: filters.user_id } : {}), // dipakai export "data saya" petugas
           ...(filters.category_id ? { categoryId: filters.category_id } : {}),
           ...(filters.q ? { name: { contains: filters.q, mode: 'insensitive' } } : {}),
+          ...(filters.region_id
+            ? { OR: ['idkab', 'idkec', 'iddesa', 'idsls', 'idsubsls'].map((field) => ({ [field]: { startsWith: filters.region_id } })) }
+            : {}),
+          ...(filters.project_id ? { projectId: filters.project_id } : {}),
+          ...(filters.activity_id ? { activityId: filters.activity_id } : {}),
+          ...(filters.approval_status ? { approvalStatus: filters.approval_status } : {}),
           ...(filters.is_outside_region !== undefined && filters.is_outside_region !== ''
             ? { isOutsideRegion: filters.is_outside_region === 'true' }
             : {}),
@@ -45,12 +51,12 @@ async function buildSheet(module: ExportModule, filters: Record<string, string |
         headers: [
           'id', 'nama', 'kategori', 'deskripsi', 'lat', 'lng', 'akurasi_gps_m',
           'idkab', 'idkec', 'iddesa', 'idsls', 'idsubsls', 'di_luar_wilayah',
-          'petugas', 'proyek', 'kegiatan', 'sumber', 'dibuat',
+          'status_approval', 'catatan_approval', 'petugas', 'proyek', 'kegiatan', 'sumber', 'dibuat',
         ],
         rows: rows.map((r) => [
           r.id, r.name, r.category.name, r.description, r.lat, r.lng, r.gpsAccuracyM,
           r.idkab, r.idkec, r.iddesa, r.idsls, r.idsubsls, r.isOutsideRegion,
-          r.user.username, r.project?.name ?? null, r.activity?.name ?? null, r.source, r.createdAt.toISOString(),
+          r.approvalStatus, r.approvalNote, r.user.username, r.project?.name ?? null, r.activity?.name ?? null, r.source, r.createdAt.toISOString(),
         ]),
       };
     }

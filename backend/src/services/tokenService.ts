@@ -84,10 +84,10 @@ export async function claimToken(code: string, userId: string) {
     // Increment atomik dengan guard kuota — hindari race saat klaim bersamaan
     const updated = await tx.$executeRaw`
       UPDATE activity_tokens
-      SET claims_count = claims_count + 1, updated_at = NOW()
+      SET claims_count = claims_count + 1, updated_at = timezone('utc', now())
       WHERE id = ${token.id}
         AND is_active = true
-        AND expires_at > NOW()
+        AND expires_at > timezone('utc', now())
         AND (max_claims IS NULL OR claims_count < max_claims);
     `;
     if (updated === 0) {

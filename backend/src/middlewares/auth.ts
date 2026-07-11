@@ -23,7 +23,7 @@ export async function auth(req: Request, _res: Response, next: NextFunction): Pr
   }
   let payload: jwt.JwtPayload;
   try {
-    payload = jwt.verify(header.slice('Bearer '.length), env.jwtSecret) as jwt.JwtPayload;
+    payload = jwt.verify(header.slice('Bearer '.length), env.jwtSecret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
   } catch {
     next(unauthorized());
     return;

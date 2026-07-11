@@ -1,10 +1,21 @@
 import { env } from './config/env';
 import { createApp } from './app';
 import { prisma } from './lib/prisma';
+import { recoverInterruptedRegionUploads } from './services/regionImportService';
 
 const app = createApp();
-const server = app.listen(env.port, () => {
-  console.log(`API berjalan di http://localhost:${env.port}`);
+let server: ReturnType<typeof app.listen>;
+
+async function start(): Promise<void> {
+  const recovered = await recoverInterruptedRegionUploads();
+  if (recovered > 0) console.log(`${recovered} import wilayah terputus ditandai gagal`);
+  server = app.listen(env.port, () => console.log(`API berjalan di http://localhost:${env.port}`));
+}
+
+void start().catch(async (err: unknown) => {
+  console.error('Gagal memulai API', err);
+  await prisma.$disconnect().catch(() => {});
+  process.exit(1);
 });
 
 // Graceful shutdown: berhenti menerima koneksi baru, tunggu request berjalan
@@ -14,6 +25,10 @@ function shutdown(signal: string): void {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`${signal} diterima — menutup server...`);
+  if (!server) {
+    void prisma.$disconnect().finally(() => process.exit(0));
+    return;
+  }
   server.close(() => {
     prisma
       .$disconnect()

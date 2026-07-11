@@ -23,12 +23,14 @@ export default function AdminInfrastructures() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const photoUrlRef = useRef<string | null>(null);
+  const loadRequestRef = useRef(0);
 
   useEffect(() => {
     categoryApi.list().then(setCategories).catch(() => {});
   }, []);
 
   const load = useCallback(() => {
+    const requestId = ++loadRequestRef.current;
     infraApi
       .adminList({
         page,
@@ -39,15 +41,19 @@ export default function AdminInfrastructures() {
         approval_status: filter.approval_status || undefined,
       })
       .then((res) => {
+        if (requestId !== loadRequestRef.current) return;
         setRows(res.data);
         setMeta(res.meta);
       })
-      .catch(() => setRows([]));
+      .catch(() => {
+        if (requestId === loadRequestRef.current) setRows([]);
+      });
   }, [page, filter]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const timer = window.setTimeout(load, filter.q ? 350 : 0);
+    return () => window.clearTimeout(timer);
+  }, [load, filter.q]);
 
   function openEdit(r: InfraDetail) {
     setEditing(r);

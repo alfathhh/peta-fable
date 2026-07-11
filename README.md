@@ -18,17 +18,17 @@ docker compose up -d db
 
 # 3. Siapkan backend
 cd backend
-cp .env.example .env        # sesuaikan bila perlu (PORT default 3001)
+cp .env.example .env        # sesuaikan bila perlu (PORT default 3000)
 npx prisma migrate deploy
-npm run seed                # admin/admin123, petugas1/admin123 — token dicetak di console
-npm run dev                 # API di http://localhost:3001
+npm run seed                # password semua akun dari SEED_ADMIN_PASSWORD; token dicetak di console
+npm run dev                 # API di http://localhost:3000
 
 # 4. Frontend (terminal lain)
 cd frontend
-npm run dev                 # http://localhost:5173 (proxy /api → :3001)
+npm run dev                 # http://localhost:5173 (proxy /api → :3000)
 ```
 
-Login dev: `admin` / `admin123` (admin) atau `petugas1` / `admin123` (petugas).
+Login dev: `admin` atau `petugas1`, dengan password dari `SEED_ADMIN_PASSWORD`.
 
 ## Import data wilayah asli
 

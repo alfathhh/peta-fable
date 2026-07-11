@@ -1,10 +1,10 @@
 # DATABASE.md — Skema Database
 
-> Versi 1.3. PostgreSQL 16 + PostGIS. ORM: **Prisma** — kolom geometry didefinisikan sebagai
+> Versi 1.4. PostgreSQL 16 + PostGIS. ORM: **Prisma** — kolom geometry didefinisikan sebagai
 > `Unsupported("geometry(...)")` di `schema.prisma`, dan index spasial/prefix dibuat
 > lewat **migration SQL manual** (Prisma migrate mendukung `--create-only` lalu edit SQL-nya).
 > Semua tabel punya `created_at`, `updated_at` (timestamp UTC).
-> PK entitas aplikasi = **CUID** (string, `@default(cuid())`). Id wilayah = **VARCHAR** (kode BPS).
+> PK entitas aplikasi umumnya **CUID** (string, `@default(cuid())`); `import_jobs.id` memakai UUID. Id wilayah = **VARCHAR** (kode BPS).
 > Nama tabel & kolom bahasa Inggris, label UI bahasa Indonesia.
 
 ---
@@ -39,6 +39,7 @@ users ──< activity_claims >── activities ──< activity_tokens
 | role | varchar(20) | **hanya 2 nilai: `admin` \| `petugas`** |
 | is_active | boolean default true | nonaktif = tidak bisa login |
 | last_login_at | timestamp nullable | |
+| deleted_at | timestamp nullable | soft delete |
 
 ### 2.2 `regions` — wilayah 5 level dalam SATU tabel
 | Kolom | Tipe | Keterangan |
@@ -122,6 +123,7 @@ Unique: `(user_id, activity_token_id)` → tidak bisa klaim 2x.
 | region_id | varchar(16) FK regions | wilayah proyek — **minimal level desa** (keputusan PO #1); validasi di service: level ∈ {`desa`,`sls`,`subsls`} |
 | region_level | varchar(10) | disalin, memudahkan filter |
 | status | varchar(20) default 'aktif' | `aktif` \| `selesai` \| `arsip` |
+| deleted_at | timestamp nullable | soft delete |
 
 ### 2.8 `project_layers` — layer GeoJSON/SHP yang diupload di proyek
 | Kolom | Tipe | Keterangan |
@@ -202,6 +204,16 @@ Index: GIST di `geom`, btree di `category_id`, `idkec`, `iddesa`, `idsls`, `user
 | detail | jsonb nullable | konteks tambahan (nama, alasan, jumlah baris) |
 | created_at | timestamp | index btree; juga index `(entity, entity_id)` dan `user_id` |
 
+### 2.12 `import_jobs` — staging import infrastruktur
+| Kolom | Tipe | Keterangan |
+|---|---|---|
+| id | text PK (uuid) | id upload yang dikembalikan tahap validasi |
+| created_by | text | id admin pembuat job |
+| status | varchar(20) | `validated` \| `committing` \| `committed` |
+| rows | jsonb | baris XLSX tervalidasi yang menunggu commit |
+| result | jsonb nullable | ringkasan hasil setelah commit |
+| created_at / updated_at | timestamp | UTC; index btree pada `created_at` |
+
 ---
 
 ## 3. Aturan Data Penting (baca sebelum coding)
@@ -215,6 +227,7 @@ Index: GIST di `geom`, btree di `category_id`, `idkec`, `iddesa`, `idsls`, `user
 7. Migration yang menyentuh PostGIS (CREATE EXTENSION, kolom geometry, index GIST/prefix) ditulis manual: `npx prisma migrate dev --create-only` → edit file SQL → `npx prisma migrate dev`.
 8. `is_outside_region` dihitung **hanya oleh server** saat create (dan saat admin mengoreksi koordinat data import): `!resolvedSubslsId?.startsWith(project.region_id)` — client tidak boleh mengirim field ini.
 9. Ganti foto = hapus file lama di storage lalu tulis `photo_path` baru (jangan menumpuk file yatim).
+10. Edit nama, kategori, deskripsi, atau foto oleh petugas pada record `approved`/`rejected` mengubah `approval_status` menjadi `pending` dan mengosongkan `approval_note`; edit admin tidak mengubah approval (keputusan PO #12).
 
 ---
 

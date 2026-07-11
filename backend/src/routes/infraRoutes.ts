@@ -11,6 +11,7 @@ import * as auditService from '../services/auditService';
 import { noStore } from '../middlewares/noStore';
 import { notFound } from '../middlewares/errorHandler';
 import { STORAGE_ROOT } from '../services/layerService';
+import { mutationLimiter } from '../middlewares/rateLimit';
 
 export const infraRoutes = Router();
 
@@ -61,7 +62,7 @@ infraRoutes.get('/infrastructures/:id', async (req, res, next) => {
   }
 });
 
-infraRoutes.post('/infrastructures', photoUpload.single('photo'), async (req, res, next) => {
+infraRoutes.post('/infrastructures', mutationLimiter, photoUpload.single('photo'), async (req, res, next) => {
   try {
     const body = createInfraSchema.parse(req.body);
     if (req.file) await assertIsImage(req.file.buffer);
@@ -73,7 +74,7 @@ infraRoutes.post('/infrastructures', photoUpload.single('photo'), async (req, re
   }
 });
 
-infraRoutes.put('/infrastructures/:id', photoUpload.single('photo'), async (req, res, next) => {
+infraRoutes.put('/infrastructures/:id', mutationLimiter, photoUpload.single('photo'), async (req, res, next) => {
   try {
     const body = updateInfraSchema.parse(req.body);
     if (req.file) await assertIsImage(req.file.buffer);
@@ -85,7 +86,7 @@ infraRoutes.put('/infrastructures/:id', photoUpload.single('photo'), async (req,
   }
 });
 
-infraRoutes.delete('/infrastructures/:id', async (req, res, next) => {
+infraRoutes.delete('/infrastructures/:id', mutationLimiter, async (req, res, next) => {
   try {
     await infraService.deleteInfrastructure(req.params.id, req.user!);
     auditService.record(req.user, 'delete', 'infrastructure', req.params.id);

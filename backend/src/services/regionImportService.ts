@@ -140,12 +140,12 @@ export async function importRegions(opts: {
                 ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromGeoJSON(${row.geometry})), 3)),
                 ${JSON.stringify(row.properties)}::jsonb,
                 ${opts.sourceVersion ?? opts.filename},
-                NOW()
+                timezone('utc', now())
               )
               ON CONFLICT (region_id) DO UPDATE SET
                 level = EXCLUDED.level, name = EXCLUDED.name, parent_id = EXCLUDED.parent_id,
                 geom = EXCLUDED.geom, properties = EXCLUDED.properties,
-                source_version = EXCLUDED.source_version, updated_at = NOW();
+                source_version = EXCLUDED.source_version, updated_at = timezone('utc', now());
             `;
           }
         }
@@ -185,4 +185,12 @@ export async function listRegionUploads() {
     take: 50,
     include: { uploader: { select: { id: true, name: true, username: true } } },
   });
+}
+
+export async function recoverInterruptedRegionUploads(): Promise<number> {
+  const result = await prisma.regionUpload.updateMany({
+    where: { status: 'processing' },
+    data: { status: 'failed', note: 'Terputus karena server dimulai ulang' },
+  });
+  return result.count;
 }

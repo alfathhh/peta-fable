@@ -7,6 +7,7 @@ import { ok } from '../lib/respond';
 import * as exportService from '../services/exportService';
 import * as importService from '../services/importService';
 import * as auditService from '../services/auditService';
+import { mutationLimiter } from '../middlewares/rateLimit';
 
 export const exportImportRoutes = Router();
 
@@ -54,7 +55,7 @@ exportImportRoutes.get('/admin/import/infrastructures/template', async (_req, re
   }
 });
 
-exportImportRoutes.post('/admin/import/infrastructures/validate', fileUpload.single('file'), async (req, res, next) => {
+exportImportRoutes.post('/admin/import/infrastructures/validate', mutationLimiter, fileUpload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) throw badRequest('File XLSX wajib diunggah');
     ok(res, await importService.validateImport(req.file.buffer, req.user!.sub));

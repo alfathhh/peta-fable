@@ -181,7 +181,7 @@ export async function commitImport(uploadId: string, userId: string): Promise<Im
   return prisma.$transaction(
     async (tx) => {
       const claimed = await tx.$executeRaw`
-        UPDATE import_jobs SET status = 'committing', updated_at = NOW()
+        UPDATE import_jobs SET status = 'committing', updated_at = timezone('utc', now())
         WHERE id = ${uploadId} AND status = 'validated';
       `;
       if (claimed === 0) {

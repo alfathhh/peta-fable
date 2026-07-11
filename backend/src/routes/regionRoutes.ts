@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { auth } from '../middlewares/auth';
 import { requireRole } from '../middlewares/requireRole';
 import { noStore } from '../middlewares/noStore';
-import { regionsLimiter } from '../middlewares/rateLimit';
+import { mutationLimiter, regionsLimiter } from '../middlewares/rateLimit';
 import { fileUpload } from '../middlewares/upload';
 import { badRequest } from '../middlewares/errorHandler';
 import { ok } from '../lib/respond';
@@ -72,7 +72,7 @@ regionRoutes.get('/regions/:regionId', async (req, res, next) => {
   }
 });
 
-regionRoutes.post('/admin/regions/upload', requireRole('admin'), fileUpload.single('file'), async (req, res, next) => {
+regionRoutes.post('/admin/regions/upload', requireRole('admin'), mutationLimiter, fileUpload.single('file'), async (req, res, next) => {
   try {
     const level = String(req.body.level ?? '') as RegionLevel;
     if (!(LEVELS as string[]).includes(level)) throw badRequest('Level tidak valid');

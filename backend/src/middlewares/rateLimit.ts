@@ -29,3 +29,12 @@ export const regionsLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Terlalu banyak permintaan data wilayah. Coba lagi sebentar lagi.' },
 });
+
+export const mutationLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  keyGenerator: keyByUser,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Terlalu banyak perubahan data. Coba lagi sebentar lagi.' },
+});

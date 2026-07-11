@@ -7,6 +7,7 @@ docs
 .git
 .claude
 *.log
-.env
-.env.*
-!.env.example
+**/.env*
+!**/.env.example
+peta
+**/*.geojson

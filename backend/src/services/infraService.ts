@@ -365,7 +365,7 @@ export async function updateInfrastructure(
     if (infra.projectId) {
       const project = await prisma.project.findUnique({ where: { id: infra.projectId } });
       if (project) regionUpdate.isOutsideRegion = isOutsideRegion(manual, project.regionId);
-    }
+    } else regionUpdate.isOutsideRegion = manual.idkab !== '1306';
   }
 
   // Geser koordinat via minimap (admin): wilayah di-resolve ulang dari titik baru
@@ -384,13 +384,17 @@ export async function updateInfrastructure(
       if (infra.projectId) {
         const project = await prisma.project.findUnique({ where: { id: infra.projectId } });
         if (project) regionUpdate.isOutsideRegion = isOutsideRegion(resolved, project.regionId);
-      }
+      } else regionUpdate.isOutsideRegion = resolved.idkab !== '1306';
     }
   }
 
   let photoPath: string | undefined;
   try {
     if (photo) photoPath = await savePhoto(id, photo);
+    const publicContentChanged =
+      input.name !== undefined || input.category_id !== undefined || input.description !== undefined || photo !== undefined;
+    const requiresReapproval =
+      user.role === 'petugas' && publicContentChanged && infra.approvalStatus !== 'pending';
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.infrastructure.update({
         where: { id },
@@ -401,6 +405,7 @@ export async function updateInfrastructure(
       ...(coordUpdate ?? {}),
       ...regionUpdate,
       ...(photoPath !== undefined ? { photoPath } : {}),
+      ...(requiresReapproval ? { approvalStatus: 'pending', approvalNote: null } : {}),
         },
         include: { category: categorySelect },
       });

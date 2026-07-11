@@ -28,7 +28,8 @@ async function upsertRegion(r: Rect) {
 }
 
 async function main() {
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'admin123';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!adminPassword) throw new Error('Env SEED_ADMIN_PASSWORD wajib diisi untuk menjalankan seed');
   const hash = await bcrypt.hash(adminPassword, 10);
 
   // --- users ---

@@ -1,8 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  return {
   plugins: [react()],
   // shpjs mengacu ke `global` ala Node — petakan ke globalThis di browser
   define: { global: 'globalThis' },
@@ -22,9 +24,10 @@ export default defineConfig({
     proxy: {
       '/api': {
         // port backend dev; ganti bila backend jalan di port lain (lihat backend/.env)
-        target: process.env.VITE_API_TARGET ?? 'http://localhost:3001',
+        target: env.VITE_API_TARGET || 'http://localhost:3000',
         changeOrigin: true,
       },
     },
   },
+  };
 });

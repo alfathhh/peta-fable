@@ -349,6 +349,138 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(approve.body.data.approvalNote).toBeNull();
   });
 
+  it('edit konten publik petugas mereset approved/rejected; edit admin mempertahankan approval', async () => {
+    const rejected = await request
+      .put(`/api/admin/infrastructures/${infraId}/approval`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'rejected', note: 'Perlu diperbaiki' });
+    expect(rejected.status).toBe(200);
+
+    const adminEdit = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('description', 'Koreksi admin');
+    expect(adminEdit.status).toBe(200);
+    expect(adminEdit.body.data.approvalStatus).toBe('rejected');
+    expect(adminEdit.body.data.approvalNote).toBe('Perlu diperbaiki');
+
+    const petugasEditRejected = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .field('description', 'Diperbaiki petugas');
+    expect(petugasEditRejected.status).toBe(200);
+    expect(petugasEditRejected.body.data.approvalStatus).toBe('pending');
+    expect(petugasEditRejected.body.data.approvalNote).toBeNull();
+
+    await request
+      .put(`/api/admin/infrastructures/${infraId}/approval`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'approved' })
+      .expect(200);
+    const petugasEditApproved = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .field('name', 'SD Dalam Diperbarui');
+    expect(petugasEditApproved.status).toBe(200);
+    expect(petugasEditApproved.body.data.approvalStatus).toBe('pending');
+    expect(petugasEditApproved.body.data.approvalNote).toBeNull();
+
+    await request
+      .put(`/api/admin/infrastructures/${infraId}/approval`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'approved' })
+      .expect(200);
+    const adminEditApproved = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('description', 'Final oleh admin');
+    expect(adminEditApproved.status).toBe(200);
+    expect(adminEditApproved.body.data.approvalStatus).toBe('approved');
+    expect(adminEditApproved.body.data.approvalNote).toBeNull();
+  });
+
+  it('admin mengoreksi infrastruktur import tanpa proyek dan menghitung ulang outside', async () => {
+    const { prisma } = await import('../src/lib/prisma');
+    const imported = await prisma.infrastructure.create({
+      data: {
+        id: 'infra_import_projectless',
+        name: 'Import Tanpa Proyek',
+        categoryId,
+        lat: -0.7,
+        lng: 100,
+        idkab: '1306',
+        isOutsideRegion: false,
+        userId: 'u_admin',
+        source: 'import',
+        approvalStatus: 'approved',
+      },
+    });
+
+    const outside = await request
+      .put(`/api/infrastructures/${imported.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('lat', '1')
+      .field('lng', '110');
+    expect(outside.status).toBe(200);
+    expect(outside.body.data.idkab).toBeNull();
+    expect(outside.body.data.isOutsideRegion).toBe(true);
+
+    const inside = await request
+      .put(`/api/infrastructures/${imported.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('lat', '-0.7')
+      .field('lng', '100');
+    expect(inside.status).toBe(200);
+    expect(inside.body.data.idkab).toBe('1306');
+    expect(inside.body.data.isOutsideRegion).toBe(false);
+  });
+
+  it('layer proyek: auth/ownership, no-store, update, traversal guard, dan delete', async () => {
+    const geojson = Buffer.from(JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: { name: 'Batas' }, geometry: { type: 'Point', coordinates: [100, -0.7] } }],
+    }));
+    expect((await request.post(`/api/my/projects/${projectId}/layers`).attach('file', geojson, 'batas.geojson')).status).toBe(401);
+    expect(
+      (await request.post(`/api/my/projects/${projectId}/layers`).set('Authorization', `Bearer ${petugas2Token}`).attach('file', geojson, 'batas.geojson')).status,
+    ).toBe(404);
+
+    const uploaded = await request
+      .post(`/api/my/projects/${projectId}/layers`)
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .field('name', 'Layer Uji')
+      .attach('file', geojson, 'batas.geojson');
+    expect(uploaded.status).toBe(201);
+    const layerId = uploaded.body.data.id as string;
+
+    const listed = await request.get(`/api/my/projects/${projectId}/layers`).set('Authorization', `Bearer ${petugasToken}`);
+    expect(listed.status).toBe(200);
+    expect(listed.headers['cache-control']).toBe('private, no-store');
+    expect((await request.get(`/api/layers/${layerId}/geojson`)).status).toBe(401);
+    expect((await request.get(`/api/layers/${layerId}/geojson`).set('Authorization', `Bearer ${petugas2Token}`)).status).toBe(404);
+    const file = await request.get(`/api/layers/${layerId}/geojson`).set('Authorization', `Bearer ${petugasToken}`);
+    expect(file.status).toBe(200);
+    expect(file.headers['cache-control']).toBe('private, no-store');
+    expect(JSON.parse(file.text).type).toBe('FeatureCollection');
+
+    const updated = await request
+      .put(`/api/layers/${layerId}`)
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .send({ name: 'Layer Baru', is_visible: false, sort_order: 3 });
+    expect(updated.status).toBe(200);
+    expect(updated.body.data).toMatchObject({ name: 'Layer Baru', isVisible: false, sortOrder: 3 });
+
+    const { prisma } = await import('../src/lib/prisma');
+    const originalPath = uploaded.body.data.geojsonPath as string;
+    await prisma.projectLayer.update({ where: { id: layerId }, data: { geojsonPath: '../package.json' } });
+    expect((await request.get(`/api/layers/${layerId}/geojson`).set('Authorization', `Bearer ${petugasToken}`)).status).toBe(404);
+    await prisma.projectLayer.update({ where: { id: layerId }, data: { geojsonPath: originalPath } });
+
+    expect((await request.delete(`/api/layers/${layerId}`).set('Authorization', `Bearer ${petugas2Token}`)).status).toBe(404);
+    expect((await request.delete(`/api/layers/${layerId}`).set('Authorization', `Bearer ${petugasToken}`)).status).toBe(200);
+    expect((await request.get(`/api/layers/${layerId}/geojson`).set('Authorization', `Bearer ${petugasToken}`)).status).toBe(404);
+  });
+
   it('foto: pemilik & thumbnail ok, petugas lain 404 saat pending', async () => {
     const sharp = (await import('sharp')).default;
     const jpeg = await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 10, g: 120, b: 200 } } })
@@ -449,6 +581,16 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(adminBlocked.status).toBe(403);
   });
 
+  it('export admin menyertakan kolom approval dan menerapkan filter status', async () => {
+    const res = await request
+      .get('/api/admin/export/infrastructures?format=csv&approval_status=approved')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('status_approval,catatan_approval');
+    expect(res.text).toContain('SD Dalam Diperbarui');
+    expect(res.text).not.toContain('SD Luar');
+  });
+
   it('import: validate → commit idempoten (ulang = hasil sama, tanpa duplikasi)', async () => {
     const ExcelJS = (await import('exceljs')).default;
     const wb = new ExcelJS.Workbook();
@@ -499,5 +641,47 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     await prisma.user.update({ where: { id: 'u_p2' }, data: { isActive: false } });
     const res = await request.get('/api/categories').set('Authorization', `Bearer ${petugas2Token}`);
     expect(res.status).toBe(401);
+  });
+
+  it('upload wilayah hanya admin, selesai async, dan recovery menandai proses terputus', async () => {
+    const geojson = Buffer.from(JSON.stringify({
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        properties: { IDKAB: '1306', NMKAB: 'Padang Pariaman Pengganti' },
+        geometry: { type: 'Polygon', coordinates: [[[99.9, -0.9], [100.5, -0.9], [100.5, -0.3], [99.9, -0.3], [99.9, -0.9]]] },
+      }],
+    }));
+    expect((await request.post('/api/admin/regions/upload').field('level', 'kab').attach('file', geojson, 'kab.geojson')).status).toBe(401);
+    expect(
+      (await request.post('/api/admin/regions/upload').set('Authorization', `Bearer ${petugasToken}`).field('level', 'kab').attach('file', geojson, 'kab.geojson')).status,
+    ).toBe(403);
+
+    const started = await request
+      .post('/api/admin/regions/upload')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('level', 'kab')
+      .attach('file', geojson, 'kab.geojson');
+    expect(started.status).toBe(200);
+    expect(started.body.data.status).toBe('processing');
+
+    const { prisma } = await import('../src/lib/prisma');
+    let status = 'processing';
+    for (let attempt = 0; attempt < 50 && status === 'processing'; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      status = (await prisma.regionUpload.findUniqueOrThrow({ where: { id: started.body.data.upload_id } })).status;
+    }
+    expect(status).toBe('done');
+    expect((await prisma.region.findUnique({ where: { regionId: '1306' } }))?.name).toBe('Padang Pariaman Pengganti');
+
+    const interrupted = await prisma.regionUpload.create({
+      data: { level: 'desa', filename: 'interrupted.geojson', uploadedBy: 'u_admin', status: 'processing' },
+    });
+    const { recoverInterruptedRegionUploads } = await import('../src/services/regionImportService');
+    expect(await recoverInterruptedRegionUploads()).toBe(1);
+    expect(await prisma.regionUpload.findUnique({ where: { id: interrupted.id } })).toMatchObject({
+      status: 'failed',
+      note: 'Terputus karena server dimulai ulang',
+    });
   });
 });

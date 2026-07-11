@@ -24,6 +24,7 @@ function ProjectRegionOutline({ project }: { project: ProjectDetailT }) {
 
   useEffect(() => {
     if (!map || !project.region) return;
+    let cancelled = false;
     if (project.region.bbox) {
       const [minLng, minLat, maxLng, maxLat] = project.region.bbox;
       map.fitBounds(L.latLngBounds([minLat, minLng], [maxLat, maxLng]), { padding: [30, 30] });
@@ -31,6 +32,7 @@ function ProjectRegionOutline({ project }: { project: ProjectDetailT }) {
     regionApi
       .geojson(project.region.level, project.region.regionId, 'high')
       .then((fc) => {
+        if (cancelled) return;
         layerRef.current?.remove();
         layerRef.current = L.geoJSON(fc, {
           style: { color: '#b91c1c', weight: 3, fill: false, dashArray: '6 4' },
@@ -39,6 +41,7 @@ function ProjectRegionOutline({ project }: { project: ProjectDetailT }) {
       })
       .catch(() => {});
     return () => {
+      cancelled = true;
       layerRef.current?.remove();
       layerRef.current = null;
     };

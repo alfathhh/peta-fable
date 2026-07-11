@@ -10,6 +10,7 @@ import { createProjectSchema, updateLayerSchema, updateProjectSchema } from '../
 import * as projectService from '../services/projectService';
 import * as layerService from '../services/layerService';
 import * as infraService from '../services/infraService';
+import { mutationLimiter } from '../middlewares/rateLimit';
 
 export const projectRoutes = Router();
 
@@ -74,7 +75,7 @@ projectRoutes.get('/my/projects/:id/layers', noStore, async (req, res, next) => 
   }
 });
 
-projectRoutes.post('/my/projects/:id/layers', fileUpload.single('file'), async (req, res, next) => {
+projectRoutes.post('/my/projects/:id/layers', mutationLimiter, fileUpload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) throw badRequest('File geojson wajib diunggah');
     created(

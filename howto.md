@@ -31,18 +31,18 @@ docker compose up -d db
 cd backend
 cp .env.example .env        # isi JWT_SECRET dengan string acak, sesuaikan PORT bila perlu
 npx prisma migrate deploy
-npm run seed                 # admin/admin123, petugas1/admin123 — token kegiatan dicetak di console
-npm run dev                  # API di http://localhost:3001 (atau PORT di .env)
+npm run seed                 # password semua akun dari SEED_ADMIN_PASSWORD; token kegiatan dicetak di console
+npm run dev                  # API di http://localhost:3000 (atau PORT di .env)
 
 # 4. Frontend (terminal lain)
 cd frontend
 npm run dev                  # http://localhost:5173, proxy /api → backend (lihat vite.config.ts)
 ```
 
-Login dev: `admin` / `admin123` (admin) atau `petugas1` / `admin123` (petugas).
+Login dev: `admin` atau `petugas1`, dengan password dari `SEED_ADMIN_PASSWORD`.
 
 > Catatan Windows: bila port 3000 dipakai proses lain (mis. Docker Desktop backend),
-> ganti `PORT` di `backend/.env` dan `VITE_API_TARGET`/target proxy di `frontend/vite.config.ts`.
+> ganti `PORT` di `backend/.env` dan `VITE_API_TARGET` di `frontend/.env` bila memakai port lain.
 
 ## 2. Import data wilayah asli
 
@@ -197,7 +197,7 @@ git clone <url-repo-anda> peta-fable && cd peta-fable
 npm install
 cd backend
 cp .env.example .env
-nano .env   # DATABASE_URL ke Postgres lokal di atas, JWT_SECRET, CORS_ORIGIN=https://domain-anda, PORT=3001
+nano .env   # DATABASE_URL ke Postgres lokal di atas, JWT_SECRET, CORS_ORIGIN=https://domain-anda, PORT=3000
 npx prisma migrate deploy
 npm run seed   # opsional
 
@@ -215,10 +215,10 @@ pm2 startup   # ikuti instruksi yang ditampilkan agar pm2 start saat boot
 ```
 
 Nginx host menyajikan `frontend/dist` sebagai statis dan proxy `/api` ke backend PM2
-(port dari `PORT` di `backend/.env`, mis. 3001) — pakai isi `deploy/nginx.frontend.conf`
+(port dari `PORT` di `backend/.env`, default 3000) — pakai isi `deploy/nginx.frontend.conf`
 sebagai referensi, tapi ganti:
 - `root` → path absolut ke `frontend/dist` di server (bukan `/usr/share/nginx/html`)
-- `proxy_pass http://backend:3000/api/` → `proxy_pass http://127.0.0.1:3001/api/`
+- `proxy_pass http://backend:3000/api/` → `proxy_pass http://127.0.0.1:3000/api/`
 
 Lalu pasang HTTPS dengan certbot seperti §5 (`certbot --nginx -d domain-anda`).
 
