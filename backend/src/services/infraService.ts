@@ -254,6 +254,9 @@ export async function createInfrastructure(
 ) {
   const project = await getOwnedProject(input.project_id, user); // 404 bila bukan miliknya
   await assertProjectWritable(project, user);
+  if (user.role !== 'admin' && (input.idsls || input.idsubsls)) {
+    throw badRequest('Wilayah petugas ditentukan otomatis dari koordinat GPS');
+  }
   const category = await prisma.category.findUnique({ where: { id: input.category_id } });
   if (!category || !category.isActive) {
     throw badRequest('Kategori tidak tersedia', { category_id: ['Pilih kategori yang masih aktif'] });

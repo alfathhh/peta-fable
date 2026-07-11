@@ -138,8 +138,8 @@ export function InfraForm({
 }) {
   const isEdit = !!existing;
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
-  // koordinat pada mode edit hanya bisa digeser admin (aturan domain #4)
-  const canMovePin = !isEdit || isAdmin;
+  // Koordinat petugas selalu terkunci ke GPS; hanya admin yang dapat menggeser pin.
+  const canMovePin = isAdmin;
   const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState(existing?.name ?? '');
   const [categoryId, setCategoryId] = useState(existing?.category.id ?? '');
@@ -156,6 +156,13 @@ export function InfraForm({
   );
   const [followGps, setFollowGps] = useState(!existing);
   const [saving, setSaving] = useState(false);
+  const [accuracyLimitEnabled, setAccuracyLimitEnabled] = useState(true);
+  const [accuracyLimit, setAccuracyLimit] = useState('20');
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibrationSeconds, setCalibrationSeconds] = useState(10);
+  const [calibrationCandidate, setCalibrationCandidate] = useState<GpsPosition | null>(null);
+  const [calibratedAccuracy, setCalibratedAccuracy] = useState<number | null>(null);
+  const calibrationSamplesRef = useRef<GpsPosition[]>([]);
 
   useEffect(() => {
     if (!existing?.photo_url) return;
@@ -176,6 +183,67 @@ export function InfraForm({
   useEffect(() => {
     if (!isEdit && followGps && gps) setCoords({ lat: gps.lat, lng: gps.lng });
   }, [isEdit, followGps, gps]);
+
+  useEffect(() => {
+    if (calibrating && gps) calibrationSamplesRef.current.push(gps);
+  }, [calibrating, gps]);
+
+  useEffect(() => {
+    if (!calibrating) return;
+    const timer = window.setInterval(() => {
+      setCalibrationSeconds((seconds) => {
+        if (seconds > 1) return seconds - 1;
+        window.clearInterval(timer);
+        setCalibrating(false);
+        const samples = calibrationSamplesRef.current;
+        if (samples.length === 0) {
+          toast.error('Kalibrasi gagal: belum ada sampel GPS');
+          return 0;
+        }
+        let totalWeight = 0;
+        let lat = 0;
+        let lng = 0;
+        let weightedAccuracy = 0;
+        for (const sample of samples) {
+          const weight = 1 / Math.max(sample.accuracy, 1) ** 2;
+          totalWeight += weight;
+          lat += sample.lat * weight;
+          lng += sample.lng * weight;
+          weightedAccuracy += sample.accuracy * weight;
+        }
+        const candidate = { lat: lat / totalWeight, lng: lng / totalWeight, accuracy: weightedAccuracy / totalWeight };
+        const limit = Number(accuracyLimit);
+        const meetsLimit = !accuracyLimitEnabled || (Number.isFinite(limit) && candidate.accuracy <= limit);
+        if (meetsLimit) {
+          setCoords({ lat: candidate.lat, lng: candidate.lng });
+          setCalibratedAccuracy(candidate.accuracy);
+          setFollowGps(false);
+          setCalibrationCandidate(null);
+          toast.success(`Kalibrasi selesai (akurasi ±${Math.round(candidate.accuracy)} m)`);
+        } else {
+          setCalibrationCandidate(candidate);
+          toast.warning(`Target belum tercapai: hasil ±${Math.round(candidate.accuracy)} m`);
+        }
+        return 0;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [calibrating, accuracyLimit, accuracyLimitEnabled]);
+
+  function startCalibration() {
+    calibrationSamplesRef.current = [];
+    setCalibrationCandidate(null);
+    setCalibrationSeconds(10);
+    setCalibrating(true);
+  }
+
+  function useCalibrationCandidate() {
+    if (!calibrationCandidate) return;
+    setCoords({ lat: calibrationCandidate.lat, lng: calibrationCandidate.lng });
+    setCalibratedAccuracy(calibrationCandidate.accuracy);
+    setFollowGps(false);
+    setCalibrationCandidate(null);
+  }
 
   useEffect(() => {
     categoryApi.list().then((c) => setCategories(c.filter((x) => x.isActive))).catch(() => {});
@@ -230,7 +298,7 @@ export function InfraForm({
       // Pada edit, string kosong harus tetap dikirim agar deskripsi lama dapat dihapus.
       if (isEdit || description) fd.append('description', description);
       if (photo) fd.append('photo', photo, 'foto.jpg');
-      if (!isEdit && regionMode === 'manual') {
+      if (!isEdit && isAdmin && regionMode === 'manual') {
         fd.append('idsls', manualRegion.idsls);
         if (manualRegion.idsubsls) fd.append('idsubsls', manualRegion.idsubsls);
       }
@@ -245,7 +313,8 @@ export function InfraForm({
       } else {
         fd.append('lat', String(coords.lat));
         fd.append('lng', String(coords.lng));
-        if (gps) fd.append('gps_accuracy_m', String(Math.round(gps.accuracy)));
+        const accuracy = calibratedAccuracy ?? gps?.accuracy;
+        if (accuracy !== undefined) fd.append('gps_accuracy_m', String(Math.round(accuracy)));
         fd.append('project_id', projectId);
         const res = await infraApi.create(fd);
         if (res.meta?.warning) toast.warning(res.meta.warning);
@@ -318,14 +387,18 @@ export function InfraForm({
         <span className="mb-1 block text-sm font-medium text-gray-700">
           Koordinat{' '}
           {!isEdit
-            ? '(dari GPS — geser pin untuk menyesuaikan)'
+            ? isAdmin
+              ? '(dari GPS — dapat dikoreksi admin)'
+              : '(GPS saat ini — otomatis)'
             : canMovePin
               ? '(geser pin bila titik kurang tepat)'
               : ''}
         </span>
-        {isEdit && !canMovePin && (
+        {!canMovePin && (
           <p className="mb-2 rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-500">
-            Koordinat hanya bisa diubah oleh admin. Jika titik salah, hubungi admin atau hapus dan buat ulang di lokasi.
+            {isEdit
+              ? 'Koordinat yang sudah diambil hanya bisa diubah oleh admin.'
+              : 'Pin mengikuti GPS saat ini dan tidak dapat digeser oleh petugas.'}
           </p>
         )}
         {coords ? (
@@ -359,10 +432,51 @@ export function InfraForm({
             {gpsError ?? 'Menunggu sinyal GPS... Pastikan izin lokasi aktif.'}
           </p>
         )}
+        {!isEdit && !isAdmin && (
+          <div className="mt-2 space-y-2 rounded-lg border border-blue-100 bg-blue-50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-blue-900">Kalibrasi GPS 10 detik</p>
+                <p className="text-xs text-blue-700">Menggabungkan beberapa sampel GPS untuk menstabilkan titik.</p>
+              </div>
+              <Button type="button" variant="secondary" disabled={calibrating || !gps} onClick={startCalibration}>
+                {calibrating ? `${calibrationSeconds} dtk` : 'Kalibrasi'}
+              </Button>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-blue-900">
+              <input
+                type="checkbox"
+                checked={accuracyLimitEnabled}
+                disabled={calibrating}
+                onChange={(event) => setAccuracyLimitEnabled(event.target.checked)}
+              />
+              Gunakan target akurasi
+              <input
+                type="number"
+                min="1"
+                max="1000"
+                value={accuracyLimit}
+                disabled={!accuracyLimitEnabled || calibrating}
+                onChange={(event) => setAccuracyLimit(event.target.value)}
+                className="w-20 rounded border border-blue-200 bg-white px-2 py-1"
+                aria-label="Target akurasi GPS dalam meter"
+              />
+              meter
+            </label>
+            {!accuracyLimitEnabled && <p className="text-xs text-blue-700">Batas akurasi dinonaktifkan; hasil 10 detik langsung digunakan.</p>}
+            {calibrationCandidate && (
+              <div className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-xs text-amber-800">
+                <span>Hasil ±{Math.round(calibrationCandidate.accuracy)} m belum memenuhi target.</span>
+                <Button type="button" variant="secondary" onClick={useCalibrationCandidate}>Gunakan hasil ini</Button>
+              </div>
+            )}
+            {calibratedAccuracy !== null && <p className="text-xs font-medium text-green-700">Hasil kalibrasi aktif: ±{Math.round(calibratedAccuracy)} m</p>}
+          </div>
+        )}
       </div>
 
       {/* Wilayah hanya dipilih saat membuat titik; edit petugas tidak boleh menggesernya. */}
-      {!isEdit && <div>
+      {!isEdit && isAdmin && <div>
         <span className="mb-1 block text-sm font-medium text-gray-700">Wilayah</span>
         <div className="mb-2 flex gap-4 text-sm">
           <label className="flex items-center gap-1.5">
@@ -382,6 +496,11 @@ export function InfraForm({
           </p>
         )}
       </div>}
+      {!isEdit && !isAdmin && (
+        <p className="text-xs text-gray-500">
+          Wilayah ditentukan otomatis oleh server berdasarkan koordinat GPS saat disimpan.
+        </p>
+      )}
 
       <Textarea label="Deskripsi" value={description ?? ''} onChange={(e) => setDescription(e.target.value)} />
 
