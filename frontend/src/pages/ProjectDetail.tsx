@@ -2,7 +2,7 @@
 import { useParams, Link } from 'react-router-dom';
 import L from 'leaflet';
 import shp from 'shpjs';
-import { ArrowLeft, Layers, Plus, Trash2, Upload, X, Pencil } from 'lucide-react';
+import { ArrowLeft, Layers, LocateFixed, Plus, Trash2, Upload, X, Pencil } from 'lucide-react';
 import { MapContainer, useMap } from '../components/map/MapContainer';
 import { CurrentLocation, type GpsPosition } from '../components/map/CurrentLocation';
 import { UploadedLayer } from '../components/map/UploadedLayer';
@@ -86,6 +86,7 @@ export default function ProjectDetail() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<InfraDetail | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [locateRequest, setLocateRequest] = useState(0);
 
   const loadProject = useCallback(() => {
     projectApi
@@ -187,7 +188,7 @@ export default function ProjectDetail() {
     <div className="relative h-full">
       <MapContainer basemap={basemap}>
         <ProjectRegionOutline project={project} />
-        <CurrentLocation onChange={setGps} onError={setGpsError} />
+        <CurrentLocation centerRequest={locateRequest} onChange={setGps} onError={setGpsError} />
         {layers.map((layer) => (
           // key stabil per layer — perubahan style/visibility di-restyle oleh
           // effect di dalam UploadedLayer, tanpa remount + refetch geojson
@@ -229,6 +230,13 @@ export default function ProjectDetail() {
           title="Layer proyek"
         >
           <Layers className="h-5 w-5 text-blue-600" />
+        </button>
+        <button
+          onClick={() => setLocateRequest((value) => value + 1)}
+          className="flex h-10 w-10 self-end items-center justify-center rounded-lg bg-white shadow-md hover:bg-gray-50"
+          title="Lokasi saya"
+        >
+          <LocateFixed className="h-5 w-5 text-blue-600" />
         </button>
       </div>
 

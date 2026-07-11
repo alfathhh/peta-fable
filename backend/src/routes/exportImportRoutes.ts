@@ -6,6 +6,7 @@ import { badRequest } from '../middlewares/errorHandler';
 import { ok } from '../lib/respond';
 import * as exportService from '../services/exportService';
 import * as importService from '../services/importService';
+import * as userImportService from '../services/userImportService';
 import * as auditService from '../services/auditService';
 import { mutationLimiter } from '../middlewares/rateLimit';
 
@@ -88,4 +89,30 @@ exportImportRoutes.get('/admin/import/infrastructures/:uploadId/failed', async (
   } catch (err) {
     next(err);
   }
+});
+
+exportImportRoutes.get('/admin/import/users/template', async (_req, res, next) => {
+  try {
+    const buffer = await userImportService.buildUserTemplate();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="template-import-pengguna.xlsx"');
+    res.send(buffer);
+  } catch (err) { next(err); }
+});
+
+exportImportRoutes.post('/admin/import/users/validate', mutationLimiter, fileUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) throw badRequest('File XLSX wajib diunggah');
+    ok(res, await userImportService.validateUserImport(req.file.buffer, req.user!.sub));
+  } catch (err) { next(err); }
+});
+
+exportImportRoutes.post('/admin/import/users/commit', async (req, res, next) => {
+  try {
+    const uploadId = String(req.body.upload_id ?? '');
+    if (!uploadId) throw badRequest('upload_id wajib diisi');
+    const result = await userImportService.commitUserImport(uploadId);
+    auditService.record(req.user, 'import-commit', 'user', uploadId, { saved: result.saved, failed: result.failed });
+    ok(res, result);
+  } catch (err) { next(err); }
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { userApi } from '../../api/resources';
+import { Download, Plus, Pencil, Trash2, Upload } from 'lucide-react';
+import { downloadBlob, importApi, userApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
 import { Button, Input, LoadingState, Modal, Select } from '../../components/ui';
 import { toast } from '../../stores/toastStore';
@@ -13,6 +13,8 @@ export default function AdminUsers() {
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState({ name: '', username: '', email: '', password: '', role: 'petugas' });
   const [saving, setSaving] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ upload_id: string; summary: { total: number; valid: number; invalid: number }; invalid_rows: { row: number; errors: string[] }[] } | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
 
   const load = () => userApi.list().then(setUsers).catch(() => setUsers([]));
   useEffect(() => {
@@ -82,14 +84,50 @@ export default function AdminUsers() {
     }
   }
 
+  async function validateImport(file: File) {
+    setImportBusy(true);
+    try { setImportPreview(await importApi.validate(file, 'users')); }
+    catch (err) { toast.error(apiErrorMessage(err)); }
+    finally { setImportBusy(false); }
+  }
+
+  async function commitImport() {
+    if (!importPreview) return;
+    setImportBusy(true);
+    try {
+      const result = await importApi.commit(importPreview.upload_id, 'users');
+      toast.success(`${result.saved} pengguna tersimpan`);
+      setImportPreview(null);
+      void load();
+    } catch (err) { toast.error(apiErrorMessage(err)); }
+    finally { setImportBusy(false); }
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Manajemen Pengguna</h1>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" /> Tambah User
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => void downloadBlob('/admin/import/users/template')}>
+            <Download className="h-4 w-4" /> Template XLSX
+          </Button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium hover:bg-gray-200">
+            <Upload className="h-4 w-4" /> {importBusy ? 'Memproses...' : 'Import Bulk'}
+            <input type="file" accept=".xlsx" className="hidden" disabled={importBusy} onChange={(e) => {
+              const file = e.target.files?.[0]; if (file) void validateImport(file); e.target.value = '';
+            }} />
+          </label>
+          <Button onClick={openCreate}><Plus className="h-4 w-4" /> Tambah User</Button>
+        </div>
       </div>
+
+      {importPreview && (
+        <div className="rounded-xl border bg-white p-3 text-sm shadow-sm">
+          <p>Total <b>{importPreview.summary.total}</b>: <b className="text-green-600">{importPreview.summary.valid} valid</b>, <b className="text-red-600">{importPreview.summary.invalid} error</b>.</p>
+          {importPreview.invalid_rows.length > 0 && <div className="my-2 max-h-40 overflow-y-auto rounded bg-red-50 p-2 text-xs">{importPreview.invalid_rows.map((row) => <p key={row.row}><b>Baris {row.row}:</b> {row.errors.join('; ')}</p>)}</div>}
+          <div className="mt-2 flex gap-2"><Button disabled={importBusy || importPreview.summary.valid === 0} onClick={() => void commitImport()}>Simpan {importPreview.summary.valid} Pengguna</Button><Button variant="secondary" onClick={() => setImportPreview(null)}>Batal</Button></div>
+        </div>
+      )}
 
       {users === null ? (
         <LoadingState />

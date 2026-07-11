@@ -95,6 +95,8 @@ export const infraApi = {
         { params },
       )
       .then((r) => r.data),
+  adminCreate: (fd: FormData) =>
+    api.post<{ data: InfraDetail }>('/admin/infrastructures', fd).then((r) => r.data.data),
 };
 
 // ---------- activities & tokens ----------
@@ -189,7 +191,7 @@ export const auditApi = {
 };
 
 export const importApi = {
-  validate: (file: File) => {
+  validate: (file: File, module: 'infrastructures' | 'users' = 'infrastructures') => {
     const fd = new FormData();
     fd.append('file', file);
     return api
@@ -200,13 +202,13 @@ export const importApi = {
           invalid_rows: { row: number; errors: string[] }[];
           summary: { total: number; valid: number; invalid: number };
         };
-      }>('/admin/import/infrastructures/validate', fd)
+      }>(`/admin/import/${module}/validate`, fd)
       .then((r) => r.data.data);
   },
-  commit: (upload_id: string) =>
+  commit: (upload_id: string, module: 'infrastructures' | 'users' = 'infrastructures') =>
     api
       .post<{ data: { saved: number; failed: number; failed_download_url: string | null } }>(
-        '/admin/import/infrastructures/commit',
+        `/admin/import/${module}/commit`,
         { upload_id },
       )
       .then((r) => r.data.data),

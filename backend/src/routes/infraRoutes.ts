@@ -5,7 +5,7 @@ import { auth } from '../middlewares/auth';
 import { requireRole } from '../middlewares/requireRole';
 import { photoUpload, assertIsImage } from '../middlewares/upload';
 import { ok, created } from '../lib/respond';
-import { adminInfraQuerySchema, approvalSchema, createInfraSchema, updateInfraSchema } from '../schemas';
+import { adminCreateInfraSchema, adminInfraQuerySchema, approvalSchema, createInfraSchema, updateInfraSchema } from '../schemas';
 import * as infraService from '../services/infraService';
 import * as auditService from '../services/auditService';
 import { noStore } from '../middlewares/noStore';
@@ -72,6 +72,16 @@ infraRoutes.post('/infrastructures', mutationLimiter, photoUpload.single('photo'
   } catch (err) {
     next(err);
   }
+});
+
+infraRoutes.post('/admin/infrastructures', requireRole('admin'), mutationLimiter, photoUpload.single('photo'), async (req, res, next) => {
+  try {
+    const body = adminCreateInfraSchema.parse(req.body);
+    if (req.file) await assertIsImage(req.file.buffer);
+    const infra = await infraService.adminCreateInfrastructure(req.user!.sub, body, req.file?.buffer);
+    auditService.record(req.user, 'create', 'infrastructure', infra.id, { source: 'admin' });
+    created(res, infra);
+  } catch (err) { next(err); }
 });
 
 infraRoutes.put('/infrastructures/:id', mutationLimiter, photoUpload.single('photo'), async (req, res, next) => {

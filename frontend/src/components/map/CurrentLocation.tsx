@@ -14,10 +14,13 @@ export interface GpsPosition {
  */
 export function CurrentLocation({
   follow = false,
+  centerRequest = 0,
   onChange,
   onError,
 }: {
   follow?: boolean;
+  /** Naikkan nilainya untuk memusatkan ulang peta ke posisi GPS terbaru. */
+  centerRequest?: number;
   onChange?: (pos: GpsPosition | null) => void;
   onError?: (message: string) => void;
 }) {
@@ -25,6 +28,14 @@ export function CurrentLocation({
   const markerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
   const followedRef = useRef(false);
+  const latestRef = useRef<GpsPosition | null>(null);
+  const centeredRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!map || centerRequest === centeredRequestRef.current || !latestRef.current) return;
+    centeredRequestRef.current = centerRequest;
+    map.setView([latestRef.current.lat, latestRef.current.lng], Math.max(map.getZoom(), 16), { animate: true });
+  }, [map, centerRequest]);
 
   useEffect(() => {
     if (!map) return;
@@ -37,6 +48,7 @@ export function CurrentLocation({
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        latestRef.current = { lat, lng, accuracy };
         onChange?.({ lat, lng, accuracy });
         if (!markerRef.current) {
           markerRef.current = L.marker([lat, lng], {
@@ -59,6 +71,10 @@ export function CurrentLocation({
           followedRef.current = true;
           map.setView([lat, lng], Math.max(map.getZoom(), 16));
         }
+        if (centerRequest > centeredRequestRef.current) {
+          centeredRequestRef.current = centerRequest;
+          map.setView([lat, lng], Math.max(map.getZoom(), 16), { animate: true });
+        }
       },
       (err) => {
         onChange?.(null);
@@ -77,8 +93,9 @@ export function CurrentLocation({
       circleRef.current?.remove();
       markerRef.current = null;
       circleRef.current = null;
+      latestRef.current = null;
     };
-  }, [map, follow, onChange, onError]);
+  }, [map, follow, centerRequest, onChange, onError]);
 
   return null;
 }

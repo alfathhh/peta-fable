@@ -308,6 +308,38 @@ export async function createInfrastructure(
   }
 }
 
+export async function adminCreateInfrastructure(
+  userId: string,
+  input: { name: string; category_id: string; description?: string | null; lat: number; lng: number },
+  photo?: Buffer,
+) {
+  const category = await prisma.category.findFirst({ where: { id: input.category_id, isActive: true } });
+  if (!category) throw badRequest('Kategori tidak tersedia');
+  const resolved = await resolveRegionFromPoint(input.lat, input.lng);
+  const id = crypto.randomUUID();
+  let photoPath: string | null = null;
+  try {
+    if (photo) photoPath = await savePhoto(id, photo);
+    const infra = await prisma.infrastructure.create({
+      data: {
+        id, name: input.name, categoryId: input.category_id, description: input.description ?? null,
+        lat: input.lat, lng: input.lng, photoPath,
+        idkab: resolved.idkab, idkec: resolved.idkec, iddesa: resolved.iddesa,
+        idsls: resolved.idsls, idsubsls: resolved.idsubsls,
+        isOutsideRegion: resolved.idkab !== '1306', userId, source: 'manual', approvalStatus: 'approved',
+      },
+      include: { category: categorySelect },
+    });
+    await prisma.$executeRaw`
+      UPDATE infrastructures SET geom = ST_SetSRID(ST_MakePoint(${input.lng}, ${input.lat}), 4326) WHERE id = ${id};
+    `;
+    return { ...infra, photo_url: photoUrl(photoPath), photo_thumb_url: photoThumbUrl(photoPath) };
+  } catch (err) {
+    removePhoto(photoPath);
+    throw err;
+  }
+}
+
 async function getEditable(id: string, user: { sub: string; role: string }) {
   const infra = await prisma.infrastructure.findFirst({ where: { id, deletedAt: null }, include: { project: true } });
   if (!infra || (user.role !== 'admin' && infra.userId !== user.sub)) throw notFound('Infrastruktur tidak ditemukan');

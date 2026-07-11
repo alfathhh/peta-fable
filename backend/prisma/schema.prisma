@@ -211,6 +211,7 @@ model AuditLog {
 model ImportJob {
   id        String   @id @default(uuid())
   createdBy String   @map("created_by")
+  module    String   @default("infrastructures") @db.VarChar(30)
   status    String   @default("validated") @db.VarChar(20) // validated|committed
   rows      Json
   result    Json?

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Layers, LocateFixed, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Layers, LocateFixed, SlidersHorizontal, X } from 'lucide-react';
 import { MapContainer } from '../components/map/MapContainer';
 import { RegionLayer } from '../components/map/RegionLayer';
 import { InfraMarkers } from '../components/map/InfraMarkers';
@@ -19,7 +19,7 @@ function LocateButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-lg bg-white p-2.5 shadow-md hover:bg-gray-50"
+      className="flex h-10 w-10 self-end items-center justify-center rounded-lg bg-white shadow-md hover:bg-gray-50"
       title="Lokasi saya"
     >
       <LocateFixed className="h-5 w-5 text-blue-600" />
@@ -32,6 +32,7 @@ function RegionInfoPanel() {
   const activeRegion = useMapStore((s) => s.activeRegion);
   const setActiveRegion = useMapStore((s) => s.setActiveRegion);
   const [detail, setDetail] = useState<RegionDetail | null>(null);
+  const [minimized, setMinimized] = useState(false);
 
   useEffect(() => {
     setDetail(null);
@@ -56,11 +57,21 @@ function RegionInfoPanel() {
             {activeRegion.region_id} · {activeRegion.level.toUpperCase()}
           </p>
         </div>
-        <button onClick={() => setActiveRegion(null)} className="rounded p-1 text-gray-400 hover:bg-gray-100" title="Hapus wilayah aktif">
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => setMinimized((value) => !value)}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            title={minimized ? 'Tampilkan legenda infrastruktur' : 'Minimize legenda infrastruktur'}
+            aria-label={minimized ? 'Tampilkan legenda infrastruktur' : 'Minimize legenda infrastruktur'}
+          >
+            {minimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          <button onClick={() => setActiveRegion(null)} className="rounded p-1 text-gray-400 hover:bg-gray-100" title="Hapus wilayah aktif">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-      {detail && detail.infrastructure_stats.length > 0 && (
+      {!minimized && detail && detail.infrastructure_stats.length > 0 && (
         <ul className="mt-2 space-y-1 border-t pt-2">
           {detail.infrastructure_stats.map((s) => {
             const Icon = getCategoryIcon(s.icon);
@@ -105,7 +116,7 @@ function ChoroplethLegend() {
 export default function MapHome() {
   const [basemap, setBasemap] = useState<BasemapKey>('street');
   const [panelOpen, setPanelOpen] = useState(false);
-  const [locate, setLocate] = useState(false);
+  const [locateRequest, setLocateRequest] = useState(0);
   const activeRegion = useMapStore((s) => s.activeRegion);
   const setActiveRegion = useMapStore((s) => s.setActiveRegion);
   const choropleth = useMapStore((s) => s.choropleth);
@@ -138,7 +149,7 @@ export default function MapHome() {
       <MapContainer basemap={basemap}>
         <RegionLayer />
         <InfraMarkers />
-        {locate && <CurrentLocation follow onError={(m) => toast.warning(m)} />}
+        {locateRequest > 0 && <CurrentLocation centerRequest={locateRequest} onError={(m) => toast.warning(m)} />}
       </MapContainer>
 
       {/* kontrol kanan-atas */}
@@ -156,7 +167,7 @@ export default function MapHome() {
             </button>
           ))}
         </div>
-        <LocateButton onClick={() => setLocate((v) => !v)} />
+        <LocateButton onClick={() => setLocateRequest((value) => value + 1)} />
       </div>
 
       {/* tombol filter (mobile bottom-sheet, desktop panel kiri) */}

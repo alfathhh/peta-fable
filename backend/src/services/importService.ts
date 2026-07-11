@@ -127,7 +127,7 @@ export async function validateImport(buffer: Buffer, userId: string) {
   }
 
   const job = await prisma.importJob.create({
-    data: { createdBy: userId, rows: JSON.parse(JSON.stringify(rows)) },
+    data: { createdBy: userId, module: 'infrastructures', rows: JSON.parse(JSON.stringify(rows)) },
   });
 
   const invalid = rows.filter((r) => r.errors.length > 0);
@@ -143,6 +143,7 @@ async function getJob(uploadId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(uploadId)) throw notFound('Upload tidak ditemukan');
   const job = await prisma.importJob.findUnique({ where: { id: uploadId } });
   if (!job) throw notFound('Upload tidak ditemukan atau sudah kedaluwarsa');
+  if (job.module !== 'infrastructures') throw notFound('Upload infrastruktur tidak ditemukan');
   return job;
 }
 
@@ -216,6 +217,7 @@ export async function commitImport(uploadId: string, userId: string): Promise<Im
             isOutsideRegion: ids.idkab !== '1306',
             userId,
             source: 'import',
+            approvalStatus: 'approved',
           },
         });
         await tx.$executeRaw`

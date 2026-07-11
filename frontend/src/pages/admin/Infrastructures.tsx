@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Camera, Check, Pencil, Trash2, X } from 'lucide-react';
+import { Camera, Check, FileSpreadsheet, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { categoryApi, infraApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
 import { Button, Input, LoadingState, Modal, Select, Textarea } from '../../components/ui';
@@ -16,6 +17,7 @@ export default function AdminInfrastructures() {
   const [filter, setFilter] = useState({ q: '', category_id: '', is_outside_region: '', approval_status: '' });
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<InfraDetail | null>(null);
+  const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', category_id: '', description: '', lat: '', lng: '' });
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -68,6 +70,14 @@ export default function AdminInfrastructures() {
     });
   }
 
+  function openCreate() {
+    setEditing(null);
+    setCreating(true);
+    setPhoto(null);
+    setPhotoPreview(null);
+    setForm({ name: '', category_id: categories[0]?.id ?? '', description: '', lat: '', lng: '' });
+  }
+
   useEffect(() => {
     if (!editing?.photo_url) return;
     let active = true;
@@ -114,7 +124,7 @@ export default function AdminInfrastructures() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!editing) return;
+    if (!editing && !creating) return;
     setSaving(true);
     try {
       const lat = Number(form.lat);
@@ -130,9 +140,15 @@ export default function AdminInfrastructures() {
       fd.append('lat', String(lat)); // admin boleh koreksi koordinat (data import)
       fd.append('lng', String(lng));
       if (photo) fd.append('photo', photo, 'foto.jpg');
-      await infraApi.update(editing.id, fd);
-      toast.success('Diperbarui');
+      if (editing) {
+        await infraApi.update(editing.id, fd);
+        toast.success('Diperbarui');
+      } else {
+        await infraApi.adminCreate(fd);
+        toast.success('Infrastruktur dibuat dan langsung di-ACC');
+      }
       setEditing(null);
+      setCreating(false);
       void load();
     } catch (err) {
       toast.error(apiErrorMessage(err));
@@ -170,7 +186,15 @@ export default function AdminInfrastructures() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4">
-      <h1 className="text-lg font-semibold">Semua Infrastruktur ({meta.total})</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold">Semua Infrastruktur ({meta.total})</h1>
+        <div className="flex gap-2">
+          <Link to="/admin/import-export" className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium hover:bg-gray-200">
+            <FileSpreadsheet className="h-4 w-4" /> Import XLSX
+          </Link>
+          <Button onClick={openCreate}><Plus className="h-4 w-4" /> Tambah Infrastruktur</Button>
+        </div>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <input
@@ -321,7 +345,7 @@ export default function AdminInfrastructures() {
         </>
       )}
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit Infrastruktur (admin)">
+      <Modal open={!!editing || creating} onClose={() => { setEditing(null); setCreating(false); }} title={editing ? 'Edit Infrastruktur (admin)' : 'Tambah Infrastruktur (admin)'}>
         <form onSubmit={submit} className="space-y-3">
           {/* foto: ganti / crop / zoom seperti form petugas */}
           <div>

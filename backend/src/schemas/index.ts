@@ -116,6 +116,14 @@ export const createInfraSchema = z.object({
   }
 });
 
+export const adminCreateInfraSchema = z.object({
+  name: z.string().min(1).max(150),
+  category_id: z.string().min(1),
+  description: z.string().max(5000).optional().nullable(),
+  lat: coordinate(-90, 90),
+  lng: coordinate(-180, 180),
+});
+
 export const updateInfraSchema = z.object({
   name: z.string().min(1).max(150).optional(),
   category_id: z.string().min(1).optional(),
