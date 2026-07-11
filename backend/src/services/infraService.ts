@@ -6,7 +6,7 @@ import { prisma } from '../lib/prisma';
 import { badRequest, notFound } from '../middlewares/errorHandler';
 import { levelOf } from '../lib/regionId';
 import { isOutsideRegion, resolveRegionFromPoint } from './regionResolver';
-import { getOwnedProject } from './projectService';
+import { assertProjectWritable, getOwnedProject } from './projectService';
 import { STORAGE_ROOT } from './layerService';
 
 const INFRA_DIR = path.join(STORAGE_ROOT, 'infra');
@@ -253,6 +253,7 @@ export async function createInfrastructure(
   photo?: Buffer,
 ) {
   const project = await getOwnedProject(input.project_id, user); // 404 bila bukan miliknya
+  await assertProjectWritable(project, user);
   const category = await prisma.category.findUnique({ where: { id: input.category_id } });
   if (!category || !category.isActive) {
     throw badRequest('Kategori tidak tersedia', { category_id: ['Pilih kategori yang masih aktif'] });
@@ -308,8 +309,9 @@ export async function createInfrastructure(
 }
 
 async function getEditable(id: string, user: { sub: string; role: string }) {
-  const infra = await prisma.infrastructure.findFirst({ where: { id, deletedAt: null } });
+  const infra = await prisma.infrastructure.findFirst({ where: { id, deletedAt: null }, include: { project: true } });
   if (!infra || (user.role !== 'admin' && infra.userId !== user.sub)) throw notFound('Infrastruktur tidak ditemukan');
+  if (infra.project) await assertProjectWritable(infra.project, user);
   return infra;
 }
 

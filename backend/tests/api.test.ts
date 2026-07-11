@@ -674,6 +674,44 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(res.status).toBe(401);
   });
 
+  it('proyek expired tetap dapat dilihat tetapi mutasi petugas ditolak; admin tetap dapat koreksi', async () => {
+    const { prisma } = await import('../src/lib/prisma');
+    await prisma.activityToken.updateMany({ where: { activityId }, data: { expiresAt: new Date(Date.now() - 1000) } });
+
+    const detail = await request.get(`/api/my/projects/${projectId}`).set('Authorization', `Bearer ${petugasToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.is_expired).toBe(true);
+
+    const update = await request
+      .put(`/api/my/projects/${projectId}`)
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .send({ name: 'Tidak boleh berubah' });
+    expect(update.status).toBe(409);
+
+    const layer = Buffer.from(JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: null }] }));
+    const upload = await request
+      .post(`/api/my/projects/${projectId}/layers`)
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .attach('file', layer, 'expired.geojson');
+    expect(upload.status).toBe(409);
+
+    const createInfra = await request
+      .post('/api/infrastructures')
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .field('name', 'Tidak boleh ditambah')
+      .field('category_id', categoryId)
+      .field('lat', '-0.7')
+      .field('lng', '100')
+      .field('project_id', projectId);
+    expect(createInfra.status).toBe(409);
+
+    const adminUpdate = await request
+      .put(`/api/admin/projects/${projectId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'arsip' });
+    expect(adminUpdate.status).toBe(200);
+  });
+
   it('upload wilayah hanya admin, selesai async, dan recovery menandai proses terputus', async () => {
     const geojson = Buffer.from(JSON.stringify({
       type: 'FeatureCollection',

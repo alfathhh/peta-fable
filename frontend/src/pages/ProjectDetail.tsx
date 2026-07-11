@@ -206,6 +206,7 @@ export default function ProjectDetail() {
           <p className="text-xs text-gray-500">
             {project.region?.name} - {project.activity?.name}
           </p>
+          {project.is_expired && <p className="text-xs font-medium text-amber-700">Kedaluwarsa - hanya dapat dilihat</p>}
         </div>
       </div>
 
@@ -233,14 +234,16 @@ export default function ProjectDetail() {
 
       {/* tombol utama bawah */}
       <div className="absolute inset-x-0 bottom-5 z-[1000] flex justify-center gap-2 px-4">
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Infrastruktur
-        </Button>
+        {!project.is_expired && (
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Infrastruktur
+          </Button>
+        )}
         <Button variant="secondary" onClick={() => setPanel(panel === 'infra' ? 'none' : 'infra')}>
           Infrastruktur Saya ({myInfras.length})
         </Button>
@@ -255,21 +258,23 @@ export default function ProjectDetail() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-600 hover:bg-gray-50">
-            <Upload className="h-4 w-4" />
-            {uploading ? 'Mengunggah...' : 'Upload GeoJSON / Shapefile (.zip)'}
-            <input
-              type="file"
-              accept=".geojson,.json,.zip"
-              className="hidden"
-              disabled={uploading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void uploadLayer(f);
-                e.target.value = '';
-              }}
-            />
-          </label>
+          {!project.is_expired && (
+            <label className="mb-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 p-3 text-sm text-gray-600 hover:bg-gray-50">
+              <Upload className="h-4 w-4" />
+              {uploading ? 'Mengunggah...' : 'Upload GeoJSON / Shapefile (.zip)'}
+              <input
+                type="file"
+                accept=".geojson,.json,.zip"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadLayer(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          )}
           <div className="space-y-2">
             {layers.map((layer) => (
               <LayerStylePanel
@@ -278,6 +283,7 @@ export default function ProjectDetail() {
                 fields={layerFields[layer.id] ?? []}
                 onChange={(updated) => setLayers((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))}
                 onDelete={() => void deleteLayer(layer)}
+                readOnly={project.is_expired}
               />
             ))}
             {layers.length === 0 && <p className="text-xs text-gray-500">Belum ada layer. Upload GeoJSON atau SHP (zip).</p>}
@@ -320,12 +326,16 @@ export default function ProjectDetail() {
                 >
                   {i.approvalStatus === 'approved' ? 'Di-ACC' : i.approvalStatus === 'rejected' ? 'Ditolak' : 'Menunggu ACC'}
                 </span>
-                <button onClick={() => void editInfra(i.id)} className="rounded p-1.5 text-gray-400 hover:text-blue-600" title="Edit">
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button onClick={() => void deleteInfra(i.id, i.name)} className="rounded p-1.5 text-gray-400 hover:text-red-600" title="Hapus">
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {!project.is_expired && (
+                  <>
+                    <button onClick={() => void editInfra(i.id)} className="rounded p-1.5 text-gray-400 hover:text-blue-600" title="Edit">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => void deleteInfra(i.id, i.name)} className="rounded p-1.5 text-gray-400 hover:text-red-600" title="Hapus">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
               </li>
             ))}
             {myInfras.length === 0 && <p className="py-3 text-xs text-gray-500">Belum ada infrastruktur di proyek ini.</p>}

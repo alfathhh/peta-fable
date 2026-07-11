@@ -177,6 +177,7 @@ export interface Project {
 export interface ProjectDetail extends Project {
   region: { regionId: string; level: string; name: string; bbox: [number, number, number, number] | null } | null;
   layers: ProjectLayer[];
+  is_expired: boolean;
 }
 
 export interface ApiError {

@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { badRequest, notFound } from '../middlewares/errorHandler';
+import { badRequest, conflict, notFound } from '../middlewares/errorHandler';
 
 const ALLOWED_LEVELS = ['kec', 'desa', 'sls', 'subsls'];
 
@@ -74,18 +74,39 @@ export async function getOwnedProject(id: string, user: { sub: string; role: str
   return project;
 }
 
+export async function isProjectExpired(project: { userId: string; activityId: string }): Promise<boolean> {
+  const activeClaim = await prisma.activityClaim.findFirst({
+    where: {
+      userId: project.userId,
+      activityId: project.activityId,
+      token: { isActive: true, expiresAt: { gt: new Date() } },
+    },
+    select: { id: true },
+  });
+  return !activeClaim;
+}
+
+/** Admin tetap dapat melakukan koreksi; proyek expired read-only bagi petugas. */
+export async function assertProjectWritable(project: { userId: string; activityId: string }, user: { role: string }): Promise<void> {
+  if (user.role !== 'admin' && await isProjectExpired(project)) {
+    throw conflict('Proyek sudah kedaluwarsa dan hanya dapat dilihat');
+  }
+}
+
 export async function getProjectDetail(id: string, user: { sub: string; role: string }) {
   const project = await getOwnedProject(id, user);
-  const [region, layers, full] = await Promise.all([
+  const [region, layers, full, isExpired] = await Promise.all([
     regionInfo(project.regionId),
     prisma.projectLayer.findMany({ where: { projectId: id }, orderBy: { sortOrder: 'asc' } }),
     prisma.project.findUnique({ where: { id }, include: includeBasic }),
+    isProjectExpired(project),
   ]);
-  return { ...full!, region, layers };
+  return { ...full!, region, layers, is_expired: isExpired };
 }
 
 export async function updateProject(id: string, user: { sub: string; role: string }, input: { name?: string; status?: string }) {
-  await getOwnedProject(id, user);
+  const project = await getOwnedProject(id, user);
+  await assertProjectWritable(project, user);
   return prisma.project.update({
     where: { id },
     data: {
@@ -97,7 +118,8 @@ export async function updateProject(id: string, user: { sub: string; role: strin
 }
 
 export async function deleteProject(id: string, user: { sub: string; role: string }) {
-  await getOwnedProject(id, user);
+  const project = await getOwnedProject(id, user);
+  await assertProjectWritable(project, user);
   await prisma.project.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 

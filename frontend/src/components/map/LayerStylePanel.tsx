@@ -11,11 +11,13 @@ export function LayerStylePanel({
   fields,
   onChange,
   onDelete,
+  readOnly = false,
 }: {
   layer: ProjectLayer;
   fields: string[]; // nama properti geojson untuk pilihan label
   onChange: (updated: ProjectLayer) => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
   const [style, setStyle] = useState<LayerStyle>(layer.style);
   const [expanded, setExpanded] = useState(false);
@@ -24,18 +26,19 @@ export function LayerStylePanel({
 
   // simpan style ke server dengan debounce; perubahan live via onChange
   function apply(next: LayerStyle) {
+    if (readOnly) return;
     setStyle(next);
     onChange({ ...layer, style: next });
   }
   useEffect(() => {
     const t = setTimeout(() => {
-      if (JSON.stringify(style) !== JSON.stringify(layer.style)) {
+      if (!readOnly && JSON.stringify(style) !== JSON.stringify(layer.style)) {
         layerApi.update(layer.id, { style }).catch((err) => toast.error(apiErrorMessage(err)));
       }
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [style]);
+  }, [style, readOnly]);
 
   async function toggleVisible() {
     try {
@@ -49,15 +52,17 @@ export function LayerStylePanel({
   return (
     <div className="rounded-lg border border-gray-200 bg-white">
       <div className="flex items-center gap-2 px-3 py-2">
-        <button onClick={() => void toggleVisible()} className="text-gray-500 hover:text-blue-600" title="Tampil/sembunyi">
+        <button onClick={() => void toggleVisible()} disabled={readOnly} className="text-gray-500 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40" title="Tampil/sembunyi">
           {layer.isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
         </button>
         <button onClick={() => setExpanded((v) => !v)} className="min-w-0 flex-1 truncate text-left text-sm font-medium">
           {layer.name} <span className="text-xs text-gray-400">({layer.featureCount} fitur)</span>
         </button>
-        <button onClick={onDelete} className="text-gray-400 hover:text-red-600" title="Hapus layer">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {!readOnly && (
+          <button onClick={onDelete} className="text-gray-400 hover:text-red-600" title="Hapus layer">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
       {expanded && (
         <div className="space-y-2 border-t px-3 py-2 text-sm">

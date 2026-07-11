@@ -45,6 +45,12 @@ function pick(props: Record<string, unknown>, keys: string[]): string | null {
   return null;
 }
 
+export function regionNameForImport(level: RegionLevel, regionId: string, sourceName: string): string {
+  if (level !== 'subsls') return sourceName;
+  const code = regionId.slice(LEVEL_TO_LENGTH.sls);
+  return sourceName.endsWith(` - ${code}`) ? sourceName : `${sourceName} - ${code}`;
+}
+
 export function parseFeatureCollection(raw: string | Buffer): FeatureCollection {
   let json: unknown;
   try {
@@ -100,14 +106,15 @@ export async function importRegions(opts: {
   fc.features.forEach((feature, i) => {
     const props = lowercaseKeys(feature.properties);
     const id = pick(props, ID_KEYS[level]);
-    const name = pick(props, NAME_KEYS[level]);
+    const sourceName = pick(props, NAME_KEYS[level]);
     if (!id) return errors.push(`Fitur #${i + 1}: properti id (${ID_KEYS[level][0]}) tidak ditemukan`);
     if (id.length !== expectedLen) return errors.push(`Fitur #${i + 1}: panjang id "${id}" bukan ${expectedLen} digit`);
-    if (!name) return errors.push(`Fitur #${i + 1}: properti nama (${NAME_KEYS[level][0]}) tidak ditemukan`);
+    if (!sourceName) return errors.push(`Fitur #${i + 1}: properti nama (${NAME_KEYS[level][0]}) tidak ditemukan`);
     if (!feature.geometry) return errors.push(`Fitur #${i + 1}: geometry kosong`);
     if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'MultiPolygon') {
       return errors.push(`Fitur #${i + 1}: geometry harus Polygon atau MultiPolygon, bukan ${feature.geometry.type}`);
     }
+    const name = regionNameForImport(level, id, sourceName);
     rows.push({ regionId: id, name, geometry: JSON.stringify(feature.geometry), properties: props });
   });
 

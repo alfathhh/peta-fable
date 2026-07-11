@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { badRequest, notFound } from '../middlewares/errorHandler';
-import { getOwnedProject } from './projectService';
+import { assertProjectWritable, getOwnedProject } from './projectService';
 import { DEFAULT_LAYER_STYLE } from '../schemas';
 
 export const STORAGE_ROOT = path.resolve(process.cwd(), 'storage');
@@ -15,7 +15,8 @@ function isStoragePath(absolutePath: string): boolean {
 }
 
 export async function listLayers(projectId: string, user: { sub: string; role: string }) {
-  await getOwnedProject(projectId, user);
+  const project = await getOwnedProject(projectId, user);
+  await assertProjectWritable(project, user);
   return prisma.projectLayer.findMany({ where: { projectId }, orderBy: { sortOrder: 'asc' } });
 }
 
@@ -76,6 +77,12 @@ async function getOwnedLayer(id: string, user: { sub: string; role: string }) {
   return layer;
 }
 
+async function getWritableLayer(id: string, user: { sub: string; role: string }) {
+  const layer = await getOwnedLayer(id, user);
+  await assertProjectWritable(layer.project, user);
+  return layer;
+}
+
 /** Path absolut file geojson layer — HANYA dipanggil dari route ber-auth. */
 export async function getLayerGeojsonPath(id: string, user: { sub: string; role: string }): Promise<string> {
   const layer = await getOwnedLayer(id, user);
@@ -90,7 +97,7 @@ export async function updateLayer(
   user: { sub: string; role: string },
   input: { name?: string; style?: unknown; is_visible?: boolean; sort_order?: number },
 ) {
-  await getOwnedLayer(id, user);
+  await getWritableLayer(id, user);
   return prisma.projectLayer.update({
     where: { id },
     data: {
@@ -103,7 +110,7 @@ export async function updateLayer(
 }
 
 export async function deleteLayer(id: string, user: { sub: string; role: string }) {
-  const layer = await getOwnedLayer(id, user);
+  const layer = await getWritableLayer(id, user);
   const abs = path.resolve(STORAGE_ROOT, layer.geojsonPath);
   const deleting = `${abs}.deleting`;
   if (isStoragePath(abs) && fs.existsSync(abs)) fs.renameSync(abs, deleting);
