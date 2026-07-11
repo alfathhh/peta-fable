@@ -95,8 +95,8 @@ export default function ProjectDetail() {
   }, [id]);
 
   const loadInfras = useCallback(() => {
-    infraApi
-      .list({ project_id: id })
+    projectApi
+      .infrastructures(id)
       .then(setInfras)
       .catch(() => setInfras([]));
   }, [id]);
@@ -186,7 +186,9 @@ export default function ProjectDetail() {
         <ProjectRegionOutline project={project} />
         <CurrentLocation onChange={setGps} onError={setGpsError} />
         {layers.map((layer) => (
-          <UploadedLayer key={`${layer.id}-${JSON.stringify(layer.style)}-${layer.isVisible}`} layer={layer} />
+          // key stabil per layer — perubahan style/visibility di-restyle oleh
+          // effect di dalam UploadedLayer, tanpa remount + refetch geojson
+          <UploadedLayer key={layer.id} layer={layer} />
         ))}
         <ProjectInfraMarkers items={myInfras} />
       </MapContainer>

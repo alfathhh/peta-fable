@@ -160,7 +160,7 @@ model Infrastructure {
   lng             Float
   gpsAccuracyM    Float?                            @map("gps_accuracy_m")
   photoPath       String?                           @map("photo_path")
-  idkab           String                            @db.VarChar(4)
+  idkab           String?                           @db.VarChar(4)
   idkec           String?                           @db.VarChar(7)
   iddesa          String?                           @db.VarChar(10)
   idsls           String?                           @db.VarChar(14)
@@ -206,6 +206,19 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([userId])
   @@map("audit_logs")
+}
+
+model ImportJob {
+  id        String   @id @default(uuid())
+  createdBy String   @map("created_by")
+  status    String   @default("validated") @db.VarChar(20) // validated|committed
+  rows      Json
+  result    Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("import_jobs")
 }
 
 model RegionUpload {

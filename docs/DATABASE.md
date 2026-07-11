@@ -1,6 +1,6 @@
 # DATABASE.md — Skema Database
 
-> Versi 1.2. PostgreSQL 16 + PostGIS. ORM: **Prisma** — kolom geometry didefinisikan sebagai
+> Versi 1.3. PostgreSQL 16 + PostGIS. ORM: **Prisma** — kolom geometry didefinisikan sebagai
 > `Unsupported("geometry(...)")` di `schema.prisma`, dan index spasial/prefix dibuat
 > lewat **migration SQL manual** (Prisma migrate mendukung `--create-only` lalu edit SQL-nya).
 > Semua tabel punya `created_at`, `updated_at` (timestamp UTC).
@@ -161,20 +161,22 @@ Contoh isi `style`:
 | geom | geometry(Point,4326) | titik — `Unsupported` di Prisma |
 | lat / lng | double | redundan agar query & export gampang tanpa raw SQL |
 | gps_accuracy_m | double nullable | akurasi GPS saat input |
-| **photo_path** | varchar nullable | **maks 1 foto** (keputusan PO #2) — langsung di tabel ini, tanpa tabel foto terpisah |
-| idkab | varchar(4) | di-resolve otomatis (ARCHITECTURE §4.4) |
-| idkec | varchar(7) | |
-| iddesa | varchar(10) | |
+| **photo_path** | varchar nullable | **maks 1 foto** (keputusan PO #2) — langsung di tabel ini, tanpa tabel foto terpisah; file thumbnail `_thumb.jpg` disimpan berdampingan, disajikan via `?size=thumb` |
+| idkab | varchar(4) **nullable** | di-resolve otomatis (ARCHITECTURE §4.4); null bila titik tidak ter-resolve ke polygon manapun (migration 3 — jangan dipaksa `1306`) |
+| idkec | varchar(7) nullable | |
+| iddesa | varchar(10) nullable | |
 | idsls | varchar(14) nullable | bisa null kalau titik di luar poligon SLS |
 | idsubsls | varchar(16) nullable | |
 | **is_outside_region** | boolean default false | **true bila titik di luar wilayah proyek** (keputusan PO #3) — dihitung server saat simpan |
+| **approval_status** | varchar(20) default 'pending' | `pending` \| `approved` \| `rejected` (keputusan PO #7) — hanya `approved` tampil di peta umum |
+| **approval_note** | text nullable | alasan penolakan admin, terlihat oleh pembuat (keputusan PO #10) |
 | user_id | text FK users | pembuat |
 | project_id | text FK nullable | null jika dibuat admin via import |
 | activity_id | text FK nullable | |
 | source | varchar(20) | `manual` \| `import` |
 | deleted_at | timestamp nullable | soft delete |
 
-Index: GIST di `geom`, btree di `category_id`, `idkec`, `iddesa`, `idsls`, `user_id`, `is_outside_region`.
+Index: GIST di `geom`, btree di `category_id`, `idkec`, `iddesa`, `idsls`, `user_id`, `is_outside_region`, `approval_status`.
 
 ### 2.10 `region_uploads` — riwayat admin replace GeoJSON wilayah
 | Kolom | Tipe | Keterangan |
@@ -186,6 +188,19 @@ Index: GIST di `geom`, btree di `category_id`, `idkec`, `iddesa`, `idsls`, `user
 | uploaded_by | text FK users | |
 | status | varchar(20) | `processing` \| `done` \| `failed` |
 | note | text nullable | pesan error jika gagal |
+
+### 2.11 `audit_logs` — riwayat aksi penting
+
+| Kolom | Tipe | Keterangan |
+|---|---|---|
+| id | text PK (cuid) | |
+| user_id | text nullable | **tanpa FK** — log harus tetap utuh walau user dihapus |
+| username / role | varchar nullable | snapshot identitas saat aksi |
+| action | varchar(50) | `create` \| `update` \| `delete` \| `approve` \| `reject` \| `upload` \| `import-commit` \| ... |
+| entity | varchar(50) | `infrastructure` \| `user` \| `category` \| `token` \| `regions` \| ... |
+| entity_id | text nullable | |
+| detail | jsonb nullable | konteks tambahan (nama, alasan, jumlah baris) |
+| created_at | timestamp | index btree; juga index `(entity, entity_id)` dan `user_id` |
 
 ---
 

@@ -70,7 +70,7 @@ export const claimTokenSchema = z.object({
 export const createProjectSchema = z.object({
   name: z.string().min(1).max(150),
   activity_id: z.string().min(1),
-  region_id: z.string().min(4).max(16),
+  region_id: z.string().regex(/^\d{4}$|^\d{7}$|^\d{10}$|^\d{14}$|^\d{16}$/, 'ID wilayah tidak valid'),
 });
 
 export const updateProjectSchema = z.object({
@@ -94,16 +94,26 @@ const idsubslsField = z
   .nullable()
   .or(z.literal('').transform(() => null));
 
+const coordinate = (min: number, max: number) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? Number.NaN : value),
+    z.coerce.number().finite().min(min).max(max),
+  );
+
 export const createInfraSchema = z.object({
   name: z.string().min(1).max(150),
   category_id: z.string().min(1),
   description: z.string().max(5000).optional().nullable(),
-  lat: z.coerce.number().min(-90).max(90),
-  lng: z.coerce.number().min(-180).max(180),
+  lat: coordinate(-90, 90),
+  lng: coordinate(-180, 180),
   gps_accuracy_m: z.coerce.number().nonnegative().optional().nullable(),
   project_id: z.string().min(1),
   idsls: idslsField,
   idsubsls: idsubslsField,
+}).superRefine((data, ctx) => {
+  if (data.idsubsls && !data.idsls) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['idsubsls'], message: 'idsubsls memerlukan idsls' });
+  }
 });
 
 export const updateInfraSchema = z.object({
@@ -111,15 +121,36 @@ export const updateInfraSchema = z.object({
   category_id: z.string().min(1).optional(),
   description: z.string().max(5000).optional().nullable(),
   // lat/lng hanya boleh dikirim admin (dicek di service, bukan di sini)
-  lat: z.coerce.number().min(-90).max(90).optional(),
-  lng: z.coerce.number().min(-180).max(180).optional(),
+  lat: coordinate(-90, 90).optional(),
+  lng: coordinate(-180, 180).optional(),
   idsls: idslsField,
   idsubsls: idsubslsField,
+}).superRefine((data, ctx) => {
+  if ((data.lat === undefined) !== (data.lng === undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lat'], message: 'lat dan lng harus dikirim bersama' });
+  }
+  if (data.idsubsls && !data.idsls) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['idsubsls'], message: 'idsubsls memerlukan idsls' });
+  }
 });
 
 export const approvalSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected']),
   note: z.string().max(500).optional().nullable(), // alasan penolakan (terlihat pembuat)
+});
+
+// Query tabel admin: nilai invalid harus jadi 422, bukan error Prisma (500)
+export const adminInfraQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional(),
+  per_page: z.coerce.number().int().min(1).max(100).optional(),
+  category_id: z.string().optional(),
+  q: z.string().optional(),
+  region_id: z.string().regex(/^\d{4,16}$/).optional(),
+  project_id: z.string().optional(),
+  activity_id: z.string().optional(),
+  user_id: z.string().optional(),
+  is_outside_region: z.enum(['true', 'false']).optional(),
+  approval_status: z.enum(['pending', 'approved', 'rejected']).optional(),
 });
 
 // ---------- layers ----------

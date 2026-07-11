@@ -35,7 +35,14 @@ function RegionInfoPanel() {
   useEffect(() => {
     setDetail(null);
     if (!activeRegion) return;
-    regionApi.detail(activeRegion.region_id).then(setDetail).catch(() => {});
+    const regionId = activeRegion.region_id;
+    let active = true;
+    regionApi.detail(regionId).then((data) => {
+      if (active && data.region_id === regionId) setDetail(data);
+    }).catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [activeRegion]);
 
   if (!activeRegion) return null;

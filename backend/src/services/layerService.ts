@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { badRequest, notFound } from '../middlewares/errorHandler';
 import { getOwnedProject } from './projectService';
@@ -7,6 +8,11 @@ import { DEFAULT_LAYER_STYLE } from '../schemas';
 
 export const STORAGE_ROOT = path.resolve(process.cwd(), 'storage');
 const LAYERS_DIR = path.join(STORAGE_ROOT, 'layers');
+
+function isStoragePath(absolutePath: string): boolean {
+  const relative = path.relative(STORAGE_ROOT, absolutePath);
+  return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative);
+}
 
 export async function listLayers(projectId: string, user: { sub: string; role: string }) {
   await getOwnedProject(projectId, user);
@@ -30,22 +36,37 @@ export async function createLayer(
   if (parsed?.type !== 'FeatureCollection' || !Array.isArray(parsed.features)) {
     throw badRequest('File harus berupa GeoJSON FeatureCollection');
   }
+  const MAX_FEATURES = 5000; // layer > ini membuat Leaflet berat & bukan use case lapangan
+  if (parsed.features.length === 0) throw badRequest('FeatureCollection kosong — tidak ada yang bisa dirender');
+  if (parsed.features.length > MAX_FEATURES) {
+    throw badRequest(`Terlalu banyak feature (${parsed.features.length}); maksimal ${MAX_FEATURES} per layer`);
+  }
+  const invalidIdx = (parsed.features as { type?: string; geometry?: unknown }[]).findIndex(
+    (f) => f?.type !== 'Feature' || f.geometry === undefined,
+  );
+  if (invalidIdx >= 0) throw badRequest(`Feature ke-${invalidIdx + 1} bukan objek Feature GeoJSON yang valid`);
 
-  const layer = await prisma.projectLayer.create({
-    data: {
+  const id = crypto.randomUUID();
+  const relPath = path.join('layers', `${id}.geojson`).replace(/\\/g, '/');
+  const absPath = path.join(STORAGE_ROOT, relPath);
+  fs.mkdirSync(LAYERS_DIR, { recursive: true });
+  fs.writeFileSync(absPath, file.buffer);
+  try {
+    return await prisma.projectLayer.create({
+      data: {
+        id,
       projectId,
       name: name?.trim() || file.originalname.replace(/\.(geo)?json$/i, ''),
-      geojsonPath: '',
+        geojsonPath: relPath,
       featureCount: parsed.features.length,
       style: DEFAULT_LAYER_STYLE,
       sortOrder: await prisma.projectLayer.count({ where: { projectId } }),
-    },
-  });
-
-  fs.mkdirSync(LAYERS_DIR, { recursive: true });
-  const relPath = path.join('layers', `${layer.id}.geojson`);
-  fs.writeFileSync(path.join(STORAGE_ROOT, relPath), file.buffer);
-  return prisma.projectLayer.update({ where: { id: layer.id }, data: { geojsonPath: relPath } });
+      },
+    });
+  } catch (err) {
+    if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
+    throw err;
+  }
 }
 
 async function getOwnedLayer(id: string, user: { sub: string; role: string }) {
@@ -59,7 +80,7 @@ async function getOwnedLayer(id: string, user: { sub: string; role: string }) {
 export async function getLayerGeojsonPath(id: string, user: { sub: string; role: string }): Promise<string> {
   const layer = await getOwnedLayer(id, user);
   const abs = path.resolve(STORAGE_ROOT, layer.geojsonPath);
-  if (!abs.startsWith(STORAGE_ROOT)) throw notFound('Layer tidak ditemukan'); // path traversal guard
+  if (!isStoragePath(abs)) throw notFound('Layer tidak ditemukan'); // path traversal guard
   if (!fs.existsSync(abs)) throw notFound('File layer tidak ditemukan');
   return abs;
 }
@@ -83,7 +104,20 @@ export async function updateLayer(
 
 export async function deleteLayer(id: string, user: { sub: string; role: string }) {
   const layer = await getOwnedLayer(id, user);
-  await prisma.projectLayer.delete({ where: { id } });
   const abs = path.resolve(STORAGE_ROOT, layer.geojsonPath);
-  if (abs.startsWith(STORAGE_ROOT) && fs.existsSync(abs)) fs.unlinkSync(abs);
+  const deleting = `${abs}.deleting`;
+  if (isStoragePath(abs) && fs.existsSync(abs)) fs.renameSync(abs, deleting);
+  try {
+    await prisma.projectLayer.delete({ where: { id } });
+  } catch (err) {
+    if (fs.existsSync(deleting)) fs.renameSync(deleting, abs);
+    throw err;
+  }
+  // DB sudah commit — kegagalan bersih-bersih file tidak boleh membuat request 500;
+  // sisa file .deleting hanya jadi yatim yang bisa disapu maintenance job.
+  try {
+    if (fs.existsSync(deleting)) fs.unlinkSync(deleting);
+  } catch (err) {
+    console.error(`Gagal menghapus file layer ${deleting} (layer sudah terhapus di DB):`, err);
+  }
 }

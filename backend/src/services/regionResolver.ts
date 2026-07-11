@@ -24,7 +24,8 @@ export async function resolveRegionFromPoint(lat: number, lng: number): Promise<
       SELECT region_id FROM regions
       WHERE level = ${level}
         AND geom IS NOT NULL
-        AND ST_Contains(geom, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
+        AND ST_Covers(geom, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
+      ORDER BY region_id
       LIMIT 1;
     `;
     const found = rows[0]?.region_id;

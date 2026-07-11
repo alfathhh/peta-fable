@@ -2,11 +2,23 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { cacheGet, cacheSet } from '../lib/cache';
 import { badRequest, notFound } from '../middlewares/errorHandler';
-import { LEVELS, type RegionLevel } from '../lib/regionId';
+import { LEVELS, childLevelOf, levelOf, type RegionLevel } from '../lib/regionId';
 
 function assertLevel(level: string): asserts level is RegionLevel {
   if (!(LEVELS as string[]).includes(level)) {
     throw badRequest('Level wilayah tidak valid', { level: [`Harus salah satu dari: ${LEVELS.join(', ')}`] });
+  }
+}
+
+function assertChildParent(level: RegionLevel, parent: string | undefined, allowExact = false): void {
+  if (level !== 'desa' && level !== 'sls' && level !== 'subsls') return;
+  const expectedParent = level === 'desa' ? 'kec' : level === 'sls' ? 'desa' : 'sls';
+  const parentLevel = parent ? levelOf(parent) : null;
+  const isExactRegion = allowExact && parentLevel === level;
+  if (!parent || (!isExactRegion && (parentLevel !== expectedParent || childLevelOf(expectedParent) !== level))) {
+    throw badRequest(`Parameter parent level ${expectedParent} wajib diisi untuk level ${level}`, {
+      parent: [`Harus berupa id wilayah level ${expectedParent}`],
+    });
   }
 }
 
@@ -16,6 +28,8 @@ function assertLevel(level: string): asserts level is RegionLevel {
  */
 export async function getRegionsGeoJSON(level: string, parent: string | undefined, detail: 'low' | 'high'): Promise<string> {
   assertLevel(level);
+  // Selain daftar anak, peta meminta satu polygon aktif dengan ID level yang sama.
+  assertChildParent(level, parent, true);
   const prefix = parent ?? '';
   const cacheKey = `regions:${level}:${prefix}:${detail}`;
   const cached = cacheGet(cacheKey);
@@ -47,6 +61,7 @@ export async function getRegionsGeoJSON(level: string, parent: string | undefine
 /** Versi ringan untuk dropdown berjenjang — tanpa geometri. */
 export async function getRegionOptions(level: string, parent: string | undefined) {
   assertLevel(level);
+  assertChildParent(level, parent);
   return prisma.region.findMany({
     where: { level, ...(parent ? { regionId: { startsWith: parent } } : {}) },
     select: { regionId: true, name: true },
@@ -135,6 +150,7 @@ const STATS_COLUMN: Record<string, 'idkab' | 'idkec' | 'iddesa' | 'idsls' | 'ids
  */
 export async function getRegionStats(level: string, parent: string | undefined, categoryIds: string[]) {
   assertLevel(level);
+  // Statistik memakai prefix ancestor (mis. kabupaten -> seluruh desa), bukan daftar polygon.
   const col = STATS_COLUMN[level]!;
   const where = {
     deletedAt: null,
@@ -170,7 +186,7 @@ export async function getRegionDetail(regionId: string) {
   const col = columnByLevel[region.level]!;
   const grouped = await prisma.infrastructure.groupBy({
     by: ['categoryId'],
-    where: { [col]: regionId, deletedAt: null },
+    where: { [col]: regionId, deletedAt: null, approvalStatus: 'approved' },
     _count: { _all: true },
   });
   const categories = grouped.length

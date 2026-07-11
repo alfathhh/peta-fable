@@ -42,10 +42,14 @@ async function fillPopupDetail(el: HTMLElement, infraId: string) {
     box.className = 'mt-1 space-y-1';
     if (d.photo_url) {
       const img = document.createElement('img');
-      img.src = d.photo_url;
+      // popup memakai thumbnail (hemat kuota petugas); fallback ke foto utama
+      const photoUrl = await infraApi.photoBlobUrl(d.photo_thumb_url ?? d.photo_url);
+      img.src = photoUrl;
       img.alt = d.name;
       img.className = 'rounded max-h-36 w-full object-cover';
       box.appendChild(img);
+      img.addEventListener('load', () => URL.revokeObjectURL(photoUrl), { once: true });
+      img.addEventListener('error', () => URL.revokeObjectURL(photoUrl), { once: true });
     }
     if (d.description) {
       const p = document.createElement('p');
@@ -96,7 +100,8 @@ export function InfraMarkers() {
     groupRef.current = null;
 
     const hasFilter = categoryFilter.length > 0 || infraSearch.trim().length > 0;
-    if (!hasFilter) return; // aturan: tanpa filter, tidak ada pin
+    if (!hasFilter || !activeRegion) return; // aturan: tanpa filter atau wilayah aktif, tidak ada pin
+    const regionId = activeRegion.region_id;
 
     async function render() {
       try {
@@ -104,7 +109,7 @@ export function InfraMarkers() {
         const results = await infraApi.list({
           category_id: categoryFilter.length ? categoryFilter.join(',') : undefined,
           q: infraSearch.trim() || undefined,
-          region_id: activeRegion?.region_id,
+          region_id: regionId,
         });
         if (cancelled || !map) return;
 

@@ -1,14 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
 import ExcelJS from 'exceljs';
 import { prisma } from '../lib/prisma';
-import { badRequest, notFound } from '../middlewares/errorHandler';
+import { badRequest, conflict, notFound } from '../middlewares/errorHandler';
 import { parentIdsOf } from '../lib/regionId';
 import { resolveRegionFromPoint } from './regionResolver';
-import { STORAGE_ROOT } from './layerService';
-
-const IMPORTS_DIR = path.join(STORAGE_ROOT, 'imports');
 
 interface ParsedRow {
   row: number;
@@ -22,10 +16,10 @@ interface ParsedRow {
   errors: string[];
 }
 
-interface ParkedImport {
-  rows: ParsedRow[];
-  createdBy: string;
-  createdAt: string;
+interface ImportResult {
+  saved: number;
+  failed: number;
+  failed_download_url: string | null;
 }
 
 /** Template XLSX: sheet Data + Petunjuk + Referensi (kategori & kode wilayah). */
@@ -76,7 +70,10 @@ function cellText(value: ExcelJS.CellValue): string {
   return String(value);
 }
 
-/** Langkah 1: validasi per baris. Belum menyimpan apa pun — file diparkir di storage. */
+/**
+ * Langkah 1: validasi per baris. Belum menyimpan infrastruktur apa pun —
+ * hasil parsing diparkir sebagai job di DB (durable lintas restart).
+ */
 export async function validateImport(buffer: Buffer, userId: string) {
   const wb = new ExcelJS.Workbook();
   try {
@@ -87,7 +84,7 @@ export async function validateImport(buffer: Buffer, userId: string) {
   const sheet = wb.getWorksheet('Data') ?? wb.worksheets[0];
   if (!sheet) throw badRequest('Sheet Data tidak ditemukan');
 
-  const categories = await prisma.category.findMany();
+  const categories = await prisma.category.findMany({ where: { isActive: true } });
   const catByName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c]));
 
   const rows: ParsedRow[] = [];
@@ -129,89 +126,123 @@ export async function validateImport(buffer: Buffer, userId: string) {
     if (r.idsls && r.idsls.length === 14 && !known.has(r.idsls)) r.errors.push(`idsls ${r.idsls} tidak dikenal`);
   }
 
-  const uploadId = crypto.randomUUID();
-  fs.mkdirSync(IMPORTS_DIR, { recursive: true });
-  const parked: ParkedImport = { rows, createdBy: userId, createdAt: new Date().toISOString() };
-  fs.writeFileSync(path.join(IMPORTS_DIR, `${uploadId}.json`), JSON.stringify(parked));
+  const job = await prisma.importJob.create({
+    data: { createdBy: userId, rows: JSON.parse(JSON.stringify(rows)) },
+  });
 
   const invalid = rows.filter((r) => r.errors.length > 0);
   return {
-    upload_id: uploadId,
+    upload_id: job.id,
     valid_rows: rows.length - invalid.length,
     invalid_rows: invalid.map((r) => ({ row: r.row, errors: r.errors })),
     summary: { total: rows.length, valid: rows.length - invalid.length, invalid: invalid.length },
   };
 }
 
-function readParked(uploadId: string): ParkedImport {
+async function getJob(uploadId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(uploadId)) throw notFound('Upload tidak ditemukan');
-  const file = path.join(IMPORTS_DIR, `${uploadId}.json`);
-  if (!fs.existsSync(file)) throw notFound('Upload tidak ditemukan atau sudah kedaluwarsa');
-  return JSON.parse(fs.readFileSync(file, 'utf-8')) as ParkedImport;
+  const job = await prisma.importJob.findUnique({ where: { id: uploadId } });
+  if (!job) throw notFound('Upload tidak ditemukan atau sudah kedaluwarsa');
+  return job;
 }
 
-/** Langkah 2: commit — hanya baris valid yang disimpan. */
-export async function commitImport(uploadId: string, userId: string) {
-  const parked = readParked(uploadId);
-  const valid = parked.rows.filter((r) => r.errors.length === 0);
-  let saved = 0;
+/**
+ * Langkah 2: commit — hanya baris valid yang disimpan, all-or-nothing.
+ * Klaim job + insert seluruh baris + tanda 'committed' terjadi dalam SATU
+ * transaction: crash kapan pun ter-rollback ke status 'validated' (aman retry),
+ * commit ulang mengembalikan hasil pertama, dan dua commit bersamaan tidak
+ * pernah menduplikasi baris (UPDATE ... WHERE status='validated' bersifat atomik).
+ */
+export async function commitImport(uploadId: string, userId: string): Promise<ImportResult> {
+  const job = await getJob(uploadId);
+  if (job.status === 'committed' && job.result) return job.result as unknown as ImportResult;
 
-  for (const r of valid) {
-    let ids: { idkab: string | null; idkec: string | null; iddesa: string | null; idsls: string | null; idsubsls: string | null };
-    if (r.idsls) {
-      const parents = parentIdsOf(r.idsls);
-      ids = {
-        idkab: parents.kab ?? null,
-        idkec: parents.kec ?? null,
-        iddesa: parents.desa ?? null,
-        idsls: r.idsls,
-        idsubsls: null,
-      };
-    } else {
+  const allRows = job.rows as unknown as ParsedRow[];
+  const valid = allRows.filter((r) => r.errors.length === 0);
+
+  // Resolusi wilayah (read-only) dikerjakan di luar transaction agar transaksinya pendek
+  const resolvedRows = await Promise.all(
+    valid.map(async (r) => {
+      if (r.idsls) {
+        const parents = parentIdsOf(r.idsls);
+        return {
+          row: r,
+          ids: { idkab: parents.kab ?? null, idkec: parents.kec ?? null, iddesa: parents.desa ?? null, idsls: r.idsls, idsubsls: null },
+        };
+      }
       const resolved = await resolveRegionFromPoint(r.lat, r.lng);
-      ids = {
-        idkab: resolved.idkab,
-        idkec: resolved.idkec,
-        iddesa: resolved.iddesa,
-        idsls: resolved.idsls,
-        idsubsls: resolved.idsubsls,
+      return {
+        row: r,
+        ids: { idkab: resolved.idkab, idkec: resolved.idkec, iddesa: resolved.iddesa, idsls: resolved.idsls, idsubsls: resolved.idsubsls },
       };
-    }
-    const infra = await prisma.infrastructure.create({
-      data: {
-        name: r.nama,
-        categoryId: r.category_id!,
-        description: r.deskripsi,
-        lat: r.lat,
-        lng: r.lng,
-        idkab: ids.idkab ?? '1306',
-        idkec: ids.idkec,
-        iddesa: ids.iddesa,
-        idsls: ids.idsls,
-        idsubsls: ids.idsubsls,
-        isOutsideRegion: ids.idkab !== '1306',
-        userId,
-        source: 'import',
-      },
-    });
-    await prisma.$executeRaw`
-      UPDATE infrastructures SET geom = ST_SetSRID(ST_MakePoint(${r.lng}, ${r.lat}), 4326) WHERE id = ${infra.id};
-    `;
-    saved++;
-  }
+    }),
+  );
 
-  const failed = parked.rows.filter((r) => r.errors.length > 0);
-  return {
-    saved,
-    failed: failed.length,
-    failed_download_url: failed.length ? `/api/admin/import/infrastructures/${uploadId}/failed` : null,
-  };
+  return prisma.$transaction(
+    async (tx) => {
+      const claimed = await tx.$executeRaw`
+        UPDATE import_jobs SET status = 'committing', updated_at = NOW()
+        WHERE id = ${uploadId} AND status = 'validated';
+      `;
+      if (claimed === 0) {
+        // Sudah diklaim transaksi lain: selesai → kembalikan hasilnya; masih berjalan → 409
+        const current = await tx.importJob.findUnique({ where: { id: uploadId } });
+        if (current?.status === 'committed' && current.result) return current.result as unknown as ImportResult;
+        throw conflict('Import sedang diproses');
+      }
+
+      for (const { row, ids } of resolvedRows) {
+        const category = await tx.category.findFirst({ where: { id: row.category_id!, isActive: true }, select: { id: true } });
+        if (!category) {
+          // sebut nomor barisnya — import bersifat all-or-nothing, admin perlu tahu
+          // baris mana yang menggagalkan seluruh commit
+          throw badRequest(
+            `Baris ${row.row}: kategori "${row.kategori}" sudah tidak aktif/tersedia. ` +
+              'Tidak ada baris yang disimpan — perbaiki lalu commit ulang.',
+          );
+        }
+        const infra = await tx.infrastructure.create({
+          data: {
+            name: row.nama,
+            categoryId: category.id,
+            description: row.deskripsi,
+            lat: row.lat,
+            lng: row.lng,
+            idkab: ids.idkab,
+            idkec: ids.idkec,
+            iddesa: ids.iddesa,
+            idsls: ids.idsls,
+            idsubsls: ids.idsubsls,
+            isOutsideRegion: ids.idkab !== '1306',
+            userId,
+            source: 'import',
+          },
+        });
+        await tx.$executeRaw`
+          UPDATE infrastructures SET geom = ST_SetSRID(ST_MakePoint(${row.lng}, ${row.lat}), 4326) WHERE id = ${infra.id};
+        `;
+      }
+
+      const failed = allRows.filter((r) => r.errors.length > 0);
+      const result: ImportResult = {
+        saved: resolvedRows.length,
+        failed: failed.length,
+        failed_download_url: failed.length ? `/api/admin/import/infrastructures/${uploadId}/failed` : null,
+      };
+      await tx.importJob.update({
+        where: { id: uploadId },
+        data: { status: 'committed', result: JSON.parse(JSON.stringify(result)) },
+      });
+      return result;
+    },
+    { timeout: 120_000 },
+  );
 }
 
 /** File XLSX berisi baris gagal + alasannya, untuk diperbaiki lalu di-upload ulang. */
 export async function buildFailedRowsXlsx(uploadId: string): Promise<Buffer> {
-  const parked = readParked(uploadId);
-  const failed = parked.rows.filter((r) => r.errors.length > 0);
+  const job = await getJob(uploadId);
+  const failed = (job.rows as unknown as ParsedRow[]).filter((r) => r.errors.length > 0);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Data');
   ws.addRow(['nama*', 'kategori*', 'lat*', 'lng*', 'deskripsi', 'idsls', 'ALASAN GAGAL']).font = { bold: true };

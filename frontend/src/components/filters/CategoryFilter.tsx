@@ -41,7 +41,10 @@ export function CategoryFilter() {
         {categories.length === 0 && <p className="text-xs text-gray-500">Belum ada kategori.</p>}
       </div>
       {categoryFilter.length === 0 && !infraSearch && (
-        <p className="text-xs text-gray-500">Centang kategori atau ketik pencarian untuk menampilkan pin.</p>
+        <p className="text-xs text-gray-500">
+          Pin muncul setelah memilih <b>wilayah</b> (dropdown/pencarian wilayah di atas) lalu mencentang kategori
+          atau mengetik pencarian infrastruktur.
+        </p>
       )}
     </div>
   );

@@ -12,17 +12,22 @@ export function SearchBox() {
   const [open, setOpen] = useState(false);
   const setActiveRegion = useMapStore((s) => s.setActiveRegion);
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  const requestId = useRef(0);
 
   useEffect(() => {
     clearTimeout(timer.current);
+    const id = ++requestId.current;
     if (q.trim().length < 2) {
       setResults([]);
+      setOpen(false);
       return;
     }
     timer.current = setTimeout(() => {
+      const query = q.trim();
       regionApi
-        .search(q.trim())
+        .search(query)
         .then((r) => {
+          if (id !== requestId.current) return;
           setResults(r);
           setOpen(true);
         })

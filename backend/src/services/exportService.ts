@@ -106,7 +106,12 @@ export async function exportModule(
   const stamp = new Date().toISOString().slice(0, 10);
 
   if (format === 'csv') {
-    const csv = stringify([sheet.headers, ...sheet.rows.map((r) => r.map((v) => (v === null ? '' : String(v))))]);
+    // Netralisasi CSV formula injection: nilai yang dimulai =, +, -, @ akan
+    // dieksekusi Excel sebagai formula saat CSV dibuka — prefix dengan apostrof.
+    // Angka murni (termasuk lat/lng negatif) dikecualikan agar kolom numerik tetap terbaca.
+    const sanitize = (v: string): string =>
+      /^[=+\-@]/.test(v) && Number.isNaN(Number(v)) ? `'${v}` : v;
+    const csv = stringify([sheet.headers, ...sheet.rows.map((r) => r.map((v) => (v === null ? '' : sanitize(String(v)))))]);
     return { buffer: Buffer.from('﻿' + csv, 'utf-8'), contentType: 'text/csv; charset=utf-8', filename: `${module}-${stamp}.csv` };
   }
 

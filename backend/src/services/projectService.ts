@@ -33,10 +33,18 @@ export async function listMyProjects(userId: string) {
 export async function createProject(userId: string, input: { name: string; activity_id: string; region_id: string }) {
   // Kegiatan harus hasil klaim user
   const claim = await prisma.activityClaim.findFirst({
-    where: { userId, activityId: input.activity_id },
+    where: {
+      userId,
+      activityId: input.activity_id,
+      token: { isActive: true, expiresAt: { gt: new Date() } },
+    },
     include: { token: true },
   });
-  if (!claim) throw badRequest('Kegiatan bukan hasil klaim Anda', { activity_id: ['Klaim token kegiatan ini dulu'] });
+  if (!claim) {
+    throw badRequest('Kegiatan belum diklaim dengan token yang masih aktif', {
+      activity_id: ['Klaim token kegiatan aktif terlebih dahulu'],
+    });
+  }
 
   // Wilayah proyek minimal level desa (keputusan PO #1)
   const region = await regionInfo(input.region_id);

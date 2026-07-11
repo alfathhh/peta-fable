@@ -81,6 +81,15 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(JSON.parse(res.text).type).toBe('FeatureCollection');
   });
 
+  it('wilayah granular wajib memiliki parent langsung', async () => {
+    const villages = await request.get('/api/regions?level=desa').set('Authorization', `Bearer ${adminToken}`);
+    expect(villages.status).toBe(422);
+    const regions = await request.get('/api/regions?level=subsls').set('Authorization', `Bearer ${adminToken}`);
+    expect(regions.status).toBe(422);
+    const options = await request.get('/api/regions/options?level=sls').set('Authorization', `Bearer ${adminToken}`);
+    expect(options.status).toBe(422);
+  });
+
   it('admin buat kategori (icon divalidasi)', async () => {
     const bad = await request
       .post('/api/admin/categories')
@@ -98,6 +107,11 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
 
   it('list infrastruktur tanpa filter → 422 (aturan domain #3)', async () => {
     const res = await request.get('/api/infrastructures').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(422);
+  });
+
+  it('project_id tidak dapat melewati filter wajib endpoint marker', async () => {
+    const res = await request.get('/api/infrastructures?project_id=project').set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(422);
   });
 
@@ -223,6 +237,12 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(back.status).toBe(200);
     expect(back.body.data.isOutsideRegion).toBe(false);
     expect(back.body.data.iddesa).toBe('1306010001');
+
+    const partialCoordinate = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .field('lat', '-0.7');
+    expect(partialCoordinate.status).toBe(422);
   });
 
   it('infra baru berstatus pending: tidak tampil di peta umum, tampil di proyek pemilik', async () => {
@@ -235,7 +255,7 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
 
     // tampilan proyek pemilik → semua status terlihat
     const ownList = await request
-      .get(`/api/infrastructures?project_id=${projectId}`)
+      .get(`/api/my/projects/${projectId}/infrastructures`)
       .set('Authorization', `Bearer ${petugasToken}`);
     expect(ownList.status).toBe(200);
     expect(ownList.body.data.length).toBe(2);
@@ -243,9 +263,9 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
 
     // petugas lain tidak melihat isi proyek orang (bukan pemiliknya)
     const otherList = await request
-      .get(`/api/infrastructures?project_id=${projectId}`)
+      .get(`/api/my/projects/${projectId}/infrastructures`)
       .set('Authorization', `Bearer ${petugas2Token}`);
-    expect(otherList.body.data).toHaveLength(0);
+    expect(otherList.status).toBe(404);
   });
 
   it('petugas tidak boleh ACC → 403; admin ACC → tampil di peta umum', async () => {
@@ -317,7 +337,7 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
     expect(reject.body.data.approvalNote).toBe('Foto kurang jelas, ulangi');
 
     const ownList = await request
-      .get(`/api/infrastructures?project_id=${projectId}`)
+      .get(`/api/my/projects/${projectId}/infrastructures`)
       .set('Authorization', `Bearer ${petugasToken}`);
     const mine = ownList.body.data.find((i: { id: string }) => i.id === infraId);
     expect(mine.approvalNote).toBe('Foto kurang jelas, ulangi');
@@ -327,6 +347,50 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ status: 'approved' });
     expect(approve.body.data.approvalNote).toBeNull();
+  });
+
+  it('foto: pemilik & thumbnail ok, petugas lain 404 saat pending', async () => {
+    const sharp = (await import('sharp')).default;
+    const jpeg = await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 10, g: 120, b: 200 } } })
+      .jpeg()
+      .toBuffer();
+
+    const created = await request
+      .post('/api/infrastructures')
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .field('name', 'Foto Test')
+      .field('category_id', categoryId)
+      .field('lat', '-0.7')
+      .field('lng', '100.0')
+      .field('project_id', projectId)
+      .attach('photo', jpeg, 'foto.jpg');
+    expect(created.status).toBe(201);
+    expect(created.body.data.photo_thumb_url).toContain('size=thumb');
+    const id = created.body.data.id;
+
+    const full = await request.get(`/api/infrastructures/${id}/photo`).set('Authorization', `Bearer ${petugasToken}`);
+    expect(full.status).toBe(200);
+    expect(full.headers['content-type']).toContain('image/jpeg');
+
+    // thumbnail benar-benar disajikan dan lebih kecil dari foto utama
+    const thumb = await request
+      .get(`/api/infrastructures/${id}/photo?size=thumb`)
+      .set('Authorization', `Bearer ${petugasToken}`);
+    expect(thumb.status).toBe(200);
+    expect(thumb.headers['content-type']).toContain('image/jpeg');
+    expect(Number(thumb.headers['content-length'])).toBeLessThan(Number(full.headers['content-length']));
+
+    // data pending: foto tidak boleh bocor ke petugas lain
+    const other = await request.get(`/api/infrastructures/${id}/photo`).set('Authorization', `Bearer ${petugas2Token}`);
+    expect(other.status).toBe(404);
+  });
+
+  it('petugas tidak dapat mengubah wilayah manual saat edit', async () => {
+    const res = await request
+      .put(`/api/infrastructures/${infraId}`)
+      .set('Authorization', `Bearer ${petugasToken}`)
+      .field('idsls', '13060100010001');
+    expect(res.status).toBe(422);
   });
 
   it('filter multi-kategori (comma) dalam satu request', async () => {
@@ -383,5 +447,57 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
       .get('/api/my/export/infrastructures?format=csv')
       .set('Authorization', `Bearer ${adminToken}`);
     expect(adminBlocked.status).toBe(403);
+  });
+
+  it('import: validate → commit idempoten (ulang = hasil sama, tanpa duplikasi)', async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Data');
+    ws.addRow(['nama*', 'kategori*', 'lat*', 'lng*', 'deskripsi', 'idsls']);
+    ws.addRow(['Import Uji Valid', 'Pendidikan', -0.7, 100.0, 'baris valid', '']);
+    ws.addRow(['Import Uji Gagal', 'Kategori Ngasal', -0.7, 100.0, 'kategori salah', '']);
+    const xlsx = Buffer.from(await wb.xlsx.writeBuffer());
+
+    const validated = await request
+      .post('/api/admin/import/infrastructures/validate')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .attach('file', xlsx, 'uji-import.xlsx');
+    expect(validated.status).toBe(200);
+    expect(validated.body.data.summary).toEqual({ total: 2, valid: 1, invalid: 1 });
+    const uploadId = validated.body.data.upload_id;
+
+    const commit1 = await request
+      .post('/api/admin/import/infrastructures/commit')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ upload_id: uploadId });
+    expect(commit1.status).toBe(200);
+    expect(commit1.body.data.saved).toBe(1);
+    expect(commit1.body.data.failed).toBe(1);
+
+    // commit ulang: hasil pertama dikembalikan, TIDAK menduplikasi baris
+    const commit2 = await request
+      .post('/api/admin/import/infrastructures/commit')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ upload_id: uploadId });
+    expect(commit2.status).toBe(200);
+    expect(commit2.body.data).toEqual(commit1.body.data);
+
+    const { prisma } = await import('../src/lib/prisma');
+    const count = await prisma.infrastructure.count({ where: { name: 'Import Uji Valid' } });
+    expect(count).toBe(1);
+
+    // unduhan baris gagal tetap tersedia setelah commit (state di DB, bukan file)
+    const failed = await request
+      .get(`/api/admin/import/infrastructures/${uploadId}/failed`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(failed.status).toBe(200);
+    expect(failed.headers['content-type']).toContain('spreadsheetml');
+  });
+
+  it('token lama ditolak segera setelah akun dinonaktifkan', async () => {
+    const { prisma } = await import('../src/lib/prisma');
+    await prisma.user.update({ where: { id: 'u_p2' }, data: { isActive: false } });
+    const res = await request.get('/api/categories').set('Authorization', `Bearer ${petugas2Token}`);
+    expect(res.status).toBe(401);
   });
 });

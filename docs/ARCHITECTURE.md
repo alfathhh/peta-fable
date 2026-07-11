@@ -185,7 +185,7 @@ Saat petugas menyimpan infrastruktur, backend menjalankan point-in-polygon (di `
 ```sql
 SELECT region_id FROM regions
 WHERE level = 'subsls'
-  AND ST_Contains(geom, ST_SetSRID(ST_MakePoint($lng, $lat), 4326))
+  AND ST_Covers(geom, ST_SetSRID(ST_MakePoint($lng, $lat), 4326))  -- Covers: titik tepat di boundary ikut terhitung
 LIMIT 1;
 ```
 
@@ -205,7 +205,7 @@ Prinsip: **satu-satunya jalur data wilayah & layer ke browser adalah API ber-JWT
 Checklist implementasi (masuk audit M8.3):
 
 - [ ] TIDAK ADA file `.geojson`/`.json` data wilayah di `frontend/public/`, di `src/` (di-import sebagai modul), atau di hasil `npm run build`. Tambahkan pengecekan CI sederhana: `! grep -rl '"FeatureCollection"' frontend/dist`.
-- [ ] Folder `backend/storage/` TIDAK di-mount sebagai `express.static`. File layer & foto disajikan lewat route ber-auth (`GET /layers/{id}/geojson`, `GET /files/...`) yang memvalidasi kepemilikan/role + path traversal.
+- [ ] Folder `backend/storage/` TIDAK di-mount sebagai `express.static`. File layer & foto disajikan lewat route ber-auth (`GET /layers/{id}/geojson`, `GET /infrastructures/{id}/photo`) yang memetakan file dari record DB + validasi kepemilikan/role + path traversal. Route file generik `/files/*` sudah DIHAPUS.
 - [ ] Semua respons geojson memakai `Cache-Control: private, no-store` supaya tidak tersimpan di proxy/CDN bersama.
 - [ ] CORS hanya mengizinkan origin FE (`CORS_ORIGIN`); tolak origin lain.
 - [ ] Rate limit umum di endpoint `/regions*` (mis. 120 req/menit/user) untuk memperlambat scraping massal.
@@ -275,7 +275,7 @@ repo/
 - **ID entitas** (user, proyek, infrastruktur, dst) pakai **CUID** (`@default(cuid())` bawaan Prisma).
 - Response API konsisten: sukses `{ "data": ..., "meta"?: ... }`, error `{ "message": "...", "errors"?: { field: ["..."] } }` (dibangun oleh `errorHandler.ts` dari ZodError/AppError).
 - Zona waktu: simpan timestamp UTC, tampilkan WIB (`Asia/Jakarta`) di FE (`Intl.DateTimeFormat`).
-- Foto: path `storage/infra/{cuid}/{timestamp}.jpg`; jangan pernah percaya nama file dari user; serve via route ber-auth `GET /files/...` dengan validasi path.
+- Foto: path `storage/infra/{id}/{timestamp}-{uuid}.jpg` (+ `_thumb.jpg`); jangan pernah percaya nama file dari user; serve via route ber-auth `GET /infrastructures/{id}/photo?size=full|thumb` — path diambil dari record DB, bukan dari URL.
 - Env wajib: `DATABASE_URL`, `JWT_SECRET`, `PORT`, `CORS_ORIGIN`. FE: `VITE_BASEMAP_FALLBACK` (opsional).
 
 ---

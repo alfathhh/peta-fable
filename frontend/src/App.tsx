@@ -1,6 +1,7 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
+import { authApi } from './api/resources';
 import { Layout } from './components/Layout';
 import { LoadingState } from './components/ui';
 import Login from './pages/Login';
@@ -32,7 +33,27 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Sesi dari localStorage tidak boleh dipercaya begitu saja: revalidasi ke
+ * /auth/me saat startup supaya akun yang dinonaktifkan / role yang berubah
+ * langsung terasa (401 ditangani interceptor → logout + redirect).
+ */
+function useSessionRevalidation() {
+  const token = useAuthStore((s) => s.token);
+  const setAuth = useAuthStore((s) => s.setAuth);
+  useEffect(() => {
+    if (!token) return;
+    authApi
+      .me()
+      .then((user) => setAuth(token, user))
+      .catch(() => {
+        // 401 sudah ditangani interceptor; error jaringan dibiarkan (jangan logout offline)
+      });
+  }, [token, setAuth]);
+}
+
 export default function App() {
+  useSessionRevalidation();
   return (
     <BrowserRouter>
       <Routes>

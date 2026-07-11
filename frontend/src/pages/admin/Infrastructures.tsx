@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Camera, Check, Pencil, Trash2, X } from 'lucide-react';
 import { categoryApi, infraApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
@@ -22,6 +22,7 @@ export default function AdminInfrastructures() {
   const [editorSrc, setEditorSrc] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const photoUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     categoryApi.list().then(setCategories).catch(() => {});
@@ -51,7 +52,7 @@ export default function AdminInfrastructures() {
   function openEdit(r: InfraDetail) {
     setEditing(r);
     setPhoto(null);
-    setPhotoPreview(r.photo_url);
+    setPhotoPreview(null);
     setForm({
       name: r.name,
       category_id: r.category.id,
@@ -60,6 +61,22 @@ export default function AdminInfrastructures() {
       lng: String(r.lng),
     });
   }
+
+  useEffect(() => {
+    if (!editing?.photo_url) return;
+    let active = true;
+    void infraApi.photoBlobUrl(editing.photo_url).then((url) => {
+      if (active) {
+        photoUrlRef.current = url;
+        setPhotoPreview(url);
+      } else URL.revokeObjectURL(url);
+    }).catch(() => setPhotoPreview(null));
+    return () => {
+      active = false;
+      if (photoUrlRef.current) URL.revokeObjectURL(photoUrlRef.current);
+      photoUrlRef.current = null;
+    };
+  }, [editing?.photo_url]);
 
   async function editPhoto() {
     if (photo) {
@@ -80,7 +97,10 @@ export default function AdminInfrastructures() {
     try {
       const compressed = await compressPhoto(file);
       setPhoto(compressed);
-      setPhotoPreview(URL.createObjectURL(compressed));
+      setPhotoPreview((old) => {
+        if (old?.startsWith('blob:')) URL.revokeObjectURL(old);
+        return URL.createObjectURL(compressed);
+      });
     } catch {
       toast.error('Gagal memproses foto');
     }
@@ -91,12 +111,18 @@ export default function AdminInfrastructures() {
     if (!editing) return;
     setSaving(true);
     try {
+      const lat = Number(form.lat);
+      const lng = Number(form.lng);
+      if (!form.lat.trim() || !form.lng.trim() || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        toast.error('Latitude dan longitude wajib diisi dengan angka yang valid');
+        return;
+      }
       const fd = new FormData();
       fd.append('name', form.name);
       fd.append('category_id', form.category_id);
       fd.append('description', form.description);
-      fd.append('lat', form.lat); // admin boleh koreksi koordinat (data import)
-      fd.append('lng', form.lng);
+      fd.append('lat', String(lat)); // admin boleh koreksi koordinat (data import)
+      fd.append('lng', String(lng));
       if (photo) fd.append('photo', photo, 'foto.jpg');
       await infraApi.update(editing.id, fd);
       toast.success('Diperbarui');
@@ -331,7 +357,7 @@ export default function AdminInfrastructures() {
           </Select>
 
           {/* koordinat: geser pin di minimap, atau ketik manual */}
-          {editing && !Number.isNaN(Number(form.lat)) && !Number.isNaN(Number(form.lng)) && (
+          {editing && form.lat.trim() !== '' && form.lng.trim() !== '' && Number.isFinite(Number(form.lat)) && Number.isFinite(Number(form.lng)) && (
             <MiniMapPicker
               lat={Number(form.lat)}
               lng={Number(form.lng)}
@@ -339,8 +365,8 @@ export default function AdminInfrastructures() {
             />
           )}
           <div className="grid grid-cols-2 gap-2">
-            <Input label="Latitude" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />
-            <Input label="Longitude" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} />
+            <Input label="Latitude" type="number" min={-90} max={90} step="any" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} required />
+            <Input label="Longitude" type="number" min={-180} max={180} step="any" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} required />
           </div>
           <Textarea label="Deskripsi" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <Button type="submit" className="w-full" disabled={saving}>

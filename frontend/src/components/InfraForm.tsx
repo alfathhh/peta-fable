@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Camera, Pencil } from 'lucide-react';
 import { categoryApi, infraApi, regionApi } from '../api/resources';
 import { apiErrorMessage } from '../api/client';
@@ -23,14 +23,17 @@ function ManualRegionPicker({
   const [kec, setKec] = useState('');
   const [desa, setDesa] = useState('');
   const [options, setOptions] = useState<Record<string, RegionOption[]>>({});
+  const requestId = useRef(0);
 
   useEffect(() => {
     regionApi.options('kec', '1306').then((o) => setOptions((p) => ({ ...p, kec: o }))).catch(() => {});
   }, []);
 
   async function loadOptions(level: string, parent: string) {
+    const id = requestId.current;
     try {
       const o = await regionApi.options(level, parent);
+      if (id !== requestId.current) return;
       setOptions((p) => ({ ...p, [level]: o }));
     } catch {
       /* abaikan */
@@ -43,8 +46,10 @@ function ManualRegionPicker({
         label="Kecamatan *"
         value={kec}
         onChange={(e) => {
+          requestId.current++;
           setKec(e.target.value);
           setDesa('');
+          setOptions((current) => ({ ...current, desa: [], sls: [], subsls: [] }));
           onChange({ idsls: '', idsubsls: '' });
           if (e.target.value) void loadOptions('desa', e.target.value);
         }}
@@ -62,7 +67,9 @@ function ManualRegionPicker({
         value={desa}
         disabled={!kec}
         onChange={(e) => {
+          requestId.current++;
           setDesa(e.target.value);
+          setOptions((current) => ({ ...current, sls: [], subsls: [] }));
           onChange({ idsls: '', idsubsls: '' });
           if (e.target.value) void loadOptions('sls', e.target.value);
         }}
@@ -80,7 +87,9 @@ function ManualRegionPicker({
         value={value.idsls}
         disabled={!desa}
         onChange={(e) => {
+          requestId.current++;
           onChange({ idsls: e.target.value, idsubsls: '' });
+          setOptions((current) => ({ ...current, subsls: [] }));
           if (e.target.value) void loadOptions('subsls', e.target.value);
         }}
         required
@@ -136,7 +145,7 @@ export function InfraForm({
   const [categoryId, setCategoryId] = useState(existing?.category.id ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [photo, setPhoto] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(existing?.photo_url ?? null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [editorSrc, setEditorSrc] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [regionMode, setRegionMode] = useState<'auto' | 'manual'>('auto');
@@ -147,6 +156,22 @@ export function InfraForm({
   );
   const [followGps, setFollowGps] = useState(!existing);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!existing?.photo_url) return;
+    let active = true;
+    let url: string | null = null;
+    void infraApi.photoBlobUrl(existing.photo_url).then((objectUrl) => {
+      if (active) {
+        url = objectUrl;
+        setPreview(objectUrl);
+      } else URL.revokeObjectURL(objectUrl);
+    }).catch(() => setPreview(null));
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [existing?.photo_url]);
 
   useEffect(() => {
     if (!isEdit && followGps && gps) setCoords({ lat: gps.lat, lng: gps.lng });
@@ -181,7 +206,10 @@ export function InfraForm({
     try {
       const compressed = await compressPhoto(file);
       setPhoto(compressed);
-      setPreview(URL.createObjectURL(compressed));
+      setPreview((old) => {
+        if (old?.startsWith('blob:')) URL.revokeObjectURL(old);
+        return URL.createObjectURL(compressed);
+      });
     } catch {
       toast.error('Gagal memproses foto');
     }
@@ -199,9 +227,10 @@ export function InfraForm({
       const fd = new FormData();
       fd.append('name', name);
       fd.append('category_id', categoryId);
-      if (description) fd.append('description', description);
+      // Pada edit, string kosong harus tetap dikirim agar deskripsi lama dapat dihapus.
+      if (isEdit || description) fd.append('description', description);
       if (photo) fd.append('photo', photo, 'foto.jpg');
-      if (regionMode === 'manual') {
+      if (!isEdit && regionMode === 'manual') {
         fd.append('idsls', manualRegion.idsls);
         if (manualRegion.idsubsls) fd.append('idsubsls', manualRegion.idsubsls);
       }
@@ -332,8 +361,8 @@ export function InfraForm({
         )}
       </div>
 
-      {/* wilayah: auto-detect dari titik, atau pilih manual sampai sub-SLS */}
-      <div>
+      {/* Wilayah hanya dipilih saat membuat titik; edit petugas tidak boleh menggesernya. */}
+      {!isEdit && <div>
         <span className="mb-1 block text-sm font-medium text-gray-700">Wilayah</span>
         <div className="mb-2 flex gap-4 text-sm">
           <label className="flex items-center gap-1.5">
@@ -352,7 +381,7 @@ export function InfraForm({
             Wilayah (kec/desa/SLS/sub-SLS) ditentukan otomatis dari titik koordinat di server.
           </p>
         )}
-      </div>
+      </div>}
 
       <Textarea label="Deskripsi" value={description ?? ''} onChange={(e) => setDescription(e.target.value)} />
 

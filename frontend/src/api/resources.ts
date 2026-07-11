@@ -67,7 +67,7 @@ export const categoryApi = {
 
 // ---------- infrastructures ----------
 export const infraApi = {
-  list: (params: { category_id?: string; q?: string; region_id?: string; project_id?: string }) =>
+  list: (params: { category_id?: string; q?: string; region_id?: string }) =>
     api.get<{ data: InfraMarkerData[] }>('/infrastructures', { params }).then((r) => r.data.data),
   detail: (id: string) => api.get<{ data: InfraDetail }>(`/infrastructures/${id}`).then((r) => r.data.data),
   create: (fd: FormData) =>
@@ -81,7 +81,7 @@ export const infraApi = {
     api
       .put<{ data: InfraDetail }>(`/admin/infrastructures/${id}/approval`, { status, note: note || undefined })
       .then((r) => r.data.data),
-  /** Ambil foto ber-auth sebagai object URL (untuk editor foto). */
+  /** Ambil foto ber-auth sebagai object URL; pemanggil wajib revoke setelah selesai. */
   photoBlobUrl: (photoUrl: string) =>
     api
       .get(photoUrl.replace(/^\/api/, ''), { responseType: 'blob' })
@@ -124,6 +124,7 @@ export const projectApi = {
   create: (body: { name: string; activity_id: string; region_id: string }) =>
     api.post<{ data: Project }>('/my/projects', body).then((r) => r.data.data),
   detail: (id: string) => api.get<{ data: ProjectDetail }>(`/my/projects/${id}`).then((r) => r.data.data),
+  infrastructures: (id: string) => api.get<{ data: InfraMarkerData[] }>(`/my/projects/${id}/infrastructures`).then((r) => r.data.data),
   update: (id: string, body: { name?: string; status?: string }) =>
     api.put<{ data: Project }>(`/my/projects/${id}`, body).then((r) => r.data.data),
   remove: (id: string) => api.delete(`/my/projects/${id}`),

@@ -15,6 +15,7 @@
 | 8 | Jul 2026 | **Wilayah infrastruktur bisa dipilih manual sampai sub-SLS** selain auto-detect point-in-polygon: mode manual mewajibkan kec/desa/SLS (cukup kirim `idsls` — id level di atasnya diturunkan dari prefix), sub-SLS opsional. Keduanya divalidasi ke master `regions`. | infraService `resolveManualRegion` · form InfraForm |
 | 9 | Jul 2026 | **Koordinat boleh disesuaikan lewat minimap** (revisi sebagian keputusan lama "hanya dari GPS"): saat MEMBUAT titik, koordinat awal tetap dari GPS tapi petugas boleh menggeser pin di minimap; saat MENGEDIT, koordinat terkunci untuk petugas — **hanya admin** yang boleh mengubah (wilayah + flag `is_outside_region` di-resolve ulang otomatis). | AGENTS/CLAUDE aturan #4 (diperbarui) · MiniMapPicker · infraService update |
 | 10 | Jul 2026 | **Fitur pendukung admin disetujui**: dashboard ringkasan, audit log aksi penting (approve/reject/CRUD user·kategori·token/upload wilayah/import), export "data saya" untuk petugas, choropleth jumlah infrastruktur, dan alasan penolakan ACC. | dashboardService · auditService · `/my/export/infrastructures` · `/regions/stats` |
+| 11 | Jul 2026 | **Membuat proyek mensyaratkan token klaim yang masih aktif & belum kedaluwarsa.** Klaim atas token yang kemudian mati/kedaluwarsa TIDAK lagi bisa dipakai membuat proyek baru (semula klaim berlaku permanen); proyek yang sudah terlanjur dibuat tetap berjalan. Konsisten dengan filter dropdown kegiatan di FE. | projectService `createProject` · AUDIT-VERIFIKASI temuan #3 |
 
 ## Konsekuensi teknis ringkas (untuk junior)
 

@@ -29,7 +29,8 @@ export async function updateActivity(id: string, input: { name?: string; descrip
 export async function deleteActivity(id: string) {
   const activity = await prisma.activity.findUnique({ where: { id } });
   if (!activity) throw notFound('Kegiatan tidak ditemukan');
-  const projects = await prisma.project.count({ where: { activityId: id, deletedAt: null } });
+  // Project yang di-soft-delete tetap mereferensikan kegiatan di database.
+  const projects = await prisma.project.count({ where: { activityId: id } });
   if (projects > 0) throw conflict('Kegiatan sudah dipakai proyek, tidak bisa dihapus');
   await prisma.$transaction([
     prisma.activityClaim.deleteMany({ where: { activityId: id } }),

@@ -12,7 +12,6 @@ import { projectRoutes } from './routes/projectRoutes';
 import { userRoutes } from './routes/userRoutes';
 import { exportImportRoutes } from './routes/exportImportRoutes';
 import { dashboardRoutes } from './routes/dashboardRoutes';
-import { fileRoutes } from './routes/fileRoutes';
 
 export function createApp() {
   const app = express();
@@ -24,6 +23,18 @@ export function createApp() {
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+  // Readiness: proses hidup TIDAK berarti siap melayani — cek DB benar-benar terjangkau
+  // (dipakai healthcheck container / load balancer sebelum mengarahkan trafik).
+  app.get('/api/ready', async (_req, res) => {
+    try {
+      const { prisma } = await import('./lib/prisma');
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ ready: true });
+    } catch {
+      res.status(503).json({ ready: false, message: 'Database tidak terjangkau' });
+    }
+  });
+
   app.use('/api/auth', authRoutes);
   app.use('/api', regionRoutes);
   app.use('/api', categoryRoutes);
@@ -33,7 +44,6 @@ export function createApp() {
   app.use('/api', userRoutes);
   app.use('/api', exportImportRoutes);
   app.use('/api', dashboardRoutes);
-  app.use('/api', fileRoutes);
 
   app.use((_req, res) => res.status(404).json({ message: 'Endpoint tidak ditemukan' }));
   app.use(errorHandler);

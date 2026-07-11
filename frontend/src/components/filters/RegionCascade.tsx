@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Select } from '../ui';
 import { regionApi } from '../../api/resources';
 import { LEVEL_LABELS, LEVELS, type RegionLevel } from '../../utils/regionId';
@@ -20,23 +20,31 @@ export function RegionCascade({
 }) {
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<Record<string, RegionOption[]>>({});
+  const requestId = useRef(0);
 
   useEffect(() => {
     regionApi.options('kec', '1306').then((opts) => setOptions((o) => ({ ...o, kec: opts }))).catch(() => {});
   }, []);
 
   async function handleSelect(level: RegionLevel, regionId: string) {
+    const id = ++requestId.current;
     const idx = CASCADE_LEVELS.indexOf(level);
     const cleared: Record<string, string> = {};
     for (let i = 0; i < idx; i++) cleared[CASCADE_LEVELS[i]] = selected[CASCADE_LEVELS[i]] ?? '';
     if (regionId) cleared[level] = regionId;
     setSelected(cleared);
+    setOptions((current) => {
+      const next = { ...current };
+      for (let i = idx + 1; i < CASCADE_LEVELS.length; i++) delete next[CASCADE_LEVELS[i]];
+      return next;
+    });
 
     // muat opsi level berikutnya
     const next = CASCADE_LEVELS[idx + 1];
     if (regionId && next) {
       try {
         const opts = await regionApi.options(next, regionId);
+        if (id !== requestId.current) return;
         setOptions((o) => ({ ...o, [next]: opts }));
       } catch {
         /* abaikan */

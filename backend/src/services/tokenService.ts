@@ -86,9 +86,16 @@ export async function claimToken(code: string, userId: string) {
       UPDATE activity_tokens
       SET claims_count = claims_count + 1, updated_at = NOW()
       WHERE id = ${token.id}
+        AND is_active = true
+        AND expires_at > NOW()
         AND (max_claims IS NULL OR claims_count < max_claims);
     `;
-    if (updated === 0) throw badRequest('Kuota pemakaian token sudah habis.');
+    if (updated === 0) {
+      const current = await tx.activityToken.findUnique({ where: { id: token.id } });
+      if (!current || !current.isActive) throw badRequest('Token sudah dinonaktifkan admin.');
+      if (current.expiresAt.getTime() <= Date.now()) throw badRequest('Token sudah kedaluwarsa.');
+      throw badRequest('Kuota pemakaian token sudah habis.');
+    }
 
     await tx.activityClaim.create({
       data: { userId, activityTokenId: token.id, activityId: token.activityId },

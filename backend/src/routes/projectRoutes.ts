@@ -9,6 +9,7 @@ import { ok, created } from '../lib/respond';
 import { createProjectSchema, updateLayerSchema, updateProjectSchema } from '../schemas';
 import * as projectService from '../services/projectService';
 import * as layerService from '../services/layerService';
+import * as infraService from '../services/infraService';
 
 export const projectRoutes = Router();
 
@@ -34,6 +35,14 @@ projectRoutes.post('/my/projects', requireRole('petugas'), async (req, res, next
 projectRoutes.get('/my/projects/:id', async (req, res, next) => {
   try {
     ok(res, await projectService.getProjectDetail(req.params.id, req.user!));
+  } catch (err) {
+    next(err);
+  }
+});
+
+projectRoutes.get('/my/projects/:id/infrastructures', async (req, res, next) => {
+  try {
+    ok(res, await infraService.listProjectInfrastructures(req.params.id, req.user!));
   } catch (err) {
     next(err);
   }

@@ -36,10 +36,11 @@ Yang wajib dilindungi auth adalah **data wilayah & layer** (§3, §7.1), bukan b
 
 | Method | Endpoint | Akses | Keterangan |
 |---|---|---|---|
-| GET | `/regions` | login | Query: `level` (wajib), `parent` (opsional, prefix id), `detail=low\|high` (default `low`). Response: **GeoJSON FeatureCollection** |
-| GET | `/regions/{region_id}` | login | Detail 1 wilayah + bbox + statistik ringkas (jumlah infra per kategori, dengan icon & color kategori) |
+| GET | `/regions` | login | Query: `level` (wajib), `parent`, `detail=low\|high` (default `low`). Untuk level granular (`desa`/`sls`/`subsls`) `parent` **wajib**: parent langsung, ATAU id level yang sama untuk mengambil 1 polygon outline (tanpa parent → 422, anti-dump massal). Response: **GeoJSON FeatureCollection** |
+| GET | `/regions/{region_id}` | login | Detail 1 wilayah + bbox + statistik ringkas (jumlah infra **approved** per kategori, dengan icon & color kategori) |
 | GET | `/regions/search?q=` | login | Cari by nama/id, semua level. Response: array `{region_id, level, name, path_name, bbox}` — `path_name` contoh: "Korong Kasai, Katapiang, Batang Anai". Maks 20 hasil |
-| GET | `/regions/options?level=&parent=` | login | Versi ringan untuk dropdown (tanpa geometri): `[{region_id, name}]`, sorted by `region_id` |
+| GET | `/regions/options?level=&parent=` | login | Versi ringan untuk dropdown (tanpa geometri): `[{region_id, name}]`, sorted by `region_id`. Level granular wajib `parent` langsung (kec→desa, desa→sls, sls→subsls) |
+| GET | `/regions/stats?level=&parent=&category_id=` | login | Jumlah infrastruktur **approved** per wilayah pada satu level (untuk choropleth): `[{region_id, count}]`. `parent` boleh ancestor (prefix); `category_id` boleh daftar dipisah koma |
 | POST | `/admin/regions/upload` | A | multipart: `level`, `file` (.geojson). Validasi field id & nama sesuai level → replace. Response: `{upload_id, status}` |
 | GET | `/admin/regions/uploads` | A | riwayat upload |
 
@@ -67,12 +68,15 @@ GET /api/regions?level=sls&parent=1306010001&detail=low
 
 | Method | Endpoint | Akses | Keterangan |
 |---|---|---|---|
-| GET | `/infrastructures` | login | **Wajib minimal salah satu filter**: `category_id` atau `q` (search nama). Filter tambahan: `region_id` (prefix match), `project_id`, `activity_id`. Tanpa filter → 422 (aturan PRD §5.4 "tidak muncul semua"). Response ringan untuk marker: `[{id, name, lat, lng, category:{id,name,icon,color}}]` |
-| GET | `/infrastructures/{id}` | login | Detail lengkap + foto (url) + nama wilayah + `is_outside_region` + `gmaps_url` (`https://www.google.com/maps?q={lat},{lng}`) |
-| POST | `/infrastructures` | P | multipart: `name, category_id, description?, lat, lng, gps_accuracy_m, project_id, photo?` (maks 1 foto). Backend resolve id wilayah dari titik; jika titik **di luar wilayah proyek** → tetap simpan dengan `is_outside_region=true` dan response menyertakan `warning`. **403** jika `project_id` bukan milik user |
-| PUT | `/infrastructures/{id}` | P (miliknya) / A | Boleh ubah: name, category_id, description, photo. **lat/lng tidak bisa diubah** oleh petugas (admin boleh, untuk koreksi data import) |
+| GET | `/infrastructures` | login | **Wajib minimal salah satu filter**: `category_id` (boleh daftar dipisah koma) atau `q` (search nama) — nilai kosong/spasi ditolak 422. Filter tambahan: `region_id` (kolom denormalisasi per level), `activity_id`. Hanya menampilkan data **approved** (peta umum). Response ringan untuk marker: `[{id, name, lat, lng, approvalStatus, category:{id,name,icon,color}}]` |
+| GET | `/infrastructures/{id}` | login | Detail lengkap + `photo_url` + `photo_thumb_url` + nama wilayah + `is_outside_region` + `approvalStatus`/`approvalNote` + `gmaps_url`. Data non-approved hanya terlihat pembuat & admin (lainnya 404) |
+| GET | `/infrastructures/{id}/photo?size=full\|thumb` | login | Stream foto dari record DB (bukan path dari klien) dengan cek pemilik/status ACC; `size=thumb` = versi 320px untuk popup (fallback ke foto utama bila tidak ada). Menggantikan route lama `/files/*` yang sudah DIHAPUS |
+| POST | `/infrastructures` | P | multipart: `name, category_id, description?, lat, lng, gps_accuracy_m?, project_id, photo?` (maks 1 foto; dinormalisasi JPEG) + wilayah manual opsional `idsls` (14 digit, wajib bila manual) & `idsubsls` (16 digit, butuh `idsls`). Tanpa manual → backend resolve dari titik (`ST_Covers`). Titik **di luar wilayah proyek** → tetap simpan `is_outside_region=true` + `warning`. Status awal `pending` (butuh ACC admin). **404** jika `project_id` bukan milik user |
+| PUT | `/infrastructures/{id}` | P (miliknya) / A | Petugas: name, category_id (yang aktif), description (string kosong = hapus), photo. **lat/lng & wilayah manual hanya admin** (422 bila petugas); lat/lng wajib dikirim berpasangan; admin ubah koordinat → wilayah + flag outside di-resolve ulang |
+| PUT | `/admin/infrastructures/{id}/approval` | A | `{status: pending\|approved\|rejected, note?}` — hanya `approved` tampil di peta umum; `note` (alasan penolakan) terlihat pembuat |
 | DELETE | `/infrastructures/{id}` | P (miliknya) / A | soft delete |
-| GET | `/admin/infrastructures` | A | tabel lengkap + pagination + semua filter (termasuk `is_outside_region`), tanpa kewajiban filter |
+| GET | `/my/projects/{id}/infrastructures` | P (miliknya) / A | Daftar SEMUA status infrastruktur milik proyek (pending/rejected termasuk) — lewat cek kepemilikan proyek, bukan bypass filter marker |
+| GET | `/admin/infrastructures` | A | tabel lengkap + pagination + semua filter (`is_outside_region`, `approval_status`, dll), tanpa kewajiban filter |
 
 ---
 
@@ -97,7 +101,7 @@ GET /api/regions?level=sls&parent=1306010001&detail=low
 | Method | Endpoint | Akses | Keterangan |
 |---|---|---|---|
 | GET | `/my/projects` | P | daftar proyek milik user |
-| POST | `/my/projects` | P | `{name, activity_id, region_id}` — `activity_id` harus hasil klaim user; `region_id` **minimal level desa** (`desa`\|`sls`\|`subsls`); level `kab`/`kec` → 422 |
+| POST | `/my/projects` | P | `{name, activity_id, region_id}` — `activity_id` harus hasil klaim user **dengan token yang masih aktif & belum kedaluwarsa** (DECISIONS #11); `region_id` **minimal level desa** (`desa`\|`sls`\|`subsls`); level `kab`/`kec` → 422 |
 | GET | `/my/projects/{id}` | P (miliknya) | detail + bbox wilayah + daftar layer |
 | PUT/DELETE | `/my/projects/{id}` | P (miliknya) | |
 | GET | `/admin/projects` | A | semua proyek + filter user/kegiatan/wilayah |
@@ -133,7 +137,15 @@ GET /api/regions?level=sls&parent=1306010001&detail=low
 | GET | `/admin/export/{module}?format=csv\|xlsx&...filters` | A | `module`: `users`\|`infrastructures`\|`projects`\|`tokens`\|`activities`. Mengikuti filter query yang sama dengan endpoint list-nya. Dibangun dengan `exceljs` (xlsx) / `csv-stringify` (csv) |
 | GET | `/admin/import/infrastructures/template` | A | unduh template XLSX (sheet Data + Petunjuk + Referensi kategori & wilayah) |
 | POST | `/admin/import/infrastructures/validate` | A | upload XLSX → response preview: `{upload_id, valid_rows, invalid_rows:[{row, errors[]}], summary}` — belum menyimpan apa pun (file diparkir sementara di storage) |
-| POST | `/admin/import/infrastructures/commit` | A | `{upload_id}` dari langkah validate → simpan baris valid. Response: jumlah tersimpan + link unduh baris gagal (.xlsx) |
+| POST | `/admin/import/infrastructures/commit` | A | `{upload_id}` dari langkah validate → simpan baris valid dalam **satu transaction (all-or-nothing)**; idempoten — commit ulang mengembalikan hasil pertama, commit bersamaan → 409. Response: jumlah tersimpan + link unduh baris gagal (.xlsx) |
+| GET | `/my/export/infrastructures?format=csv\|xlsx` | P | export seluruh infrastruktur milik petugas login ("Export Data Saya") |
+
+### 9.1 Dashboard & Audit (admin)
+
+| Method | Endpoint | Akses | Keterangan |
+|---|---|---|---|
+| GET | `/admin/dashboard` | A | ringkasan: totals (users, infrastruktur, antrean ACC, di luar wilayah, proyek aktif, token aktif), sebaran per kategori & kecamatan, 5 data terbaru |
+| GET | `/admin/audit-logs?page=&entity=&user_id=` | A | riwayat aksi penting (approve/reject, CRUD user·kategori·token, upload wilayah, import) + pagination |
 
 Kolom template import infrastruktur:
 `nama* | kategori* (harus sama dgn master) | lat* | lng* | deskripsi | idsls (opsional — kalau kosong, resolve dari koordinat)`

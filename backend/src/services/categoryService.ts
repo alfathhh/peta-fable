@@ -30,7 +30,8 @@ export async function updateCategory(id: string, input: { name?: string; icon?: 
 export async function deleteCategory(id: string) {
   const cat = await prisma.category.findUnique({ where: { id } });
   if (!cat) throw notFound('Kategori tidak ditemukan');
-  const used = await prisma.infrastructure.count({ where: { categoryId: id, deletedAt: null } });
+  // Soft-deleted infrastructure tetap menyimpan foreign key kategori.
+  const used = await prisma.infrastructure.count({ where: { categoryId: id } });
   if (used > 0) throw conflict(`Kategori masih dipakai ${used} infrastruktur`);
   await prisma.category.delete({ where: { id } });
 }

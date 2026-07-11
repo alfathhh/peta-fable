@@ -14,6 +14,11 @@ services:
       POSTGRES_DB: peta
     volumes:
       - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U peta -d peta"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     # TIDAK di-publish ke host — hanya backend yang boleh mengakses DB
 
   backend:
@@ -22,7 +27,15 @@ services:
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     depends_on:
-      - db
+      db:
+        # migrate deploy saat start tidak boleh berpacu dengan boot PostgreSQL
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     environment:
       DATABASE_URL: postgresql://peta:${DB_PASSWORD}@db:5432/peta
       JWT_SECRET: ${JWT_SECRET}

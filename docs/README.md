@@ -51,8 +51,8 @@ Admin memantau semua data → export CSV/Excel → import bulk bila perlu
 |---|---|---|
 | PRD.md | 1.2 | Keputusan PO diterapkan: min. desa, 1 foto, simpan+flag, tanpa offline, geojson privat |
 | ARCHITECTURE.md | 1.2 | Basemap XYZ Google langsung (risiko tercatat) + bab Perlindungan Data GeoJSON |
-| DATABASE.md | 1.2 | `photo_path` & `is_outside_region` di infrastruktur; tabel photos & tile_sessions dihapus |
-| API-SPEC.md | 1.2 | Endpoint tiles dihapus; validasi proyek min. desa; header privasi geojson |
+| DATABASE.md | 1.3 | + `approval_status`/`approval_note`, tabel `audit_logs`, `idkab` nullable |
+| API-SPEC.md | 1.3 | + approval, foto `/infrastructures/{id}/photo`, stats choropleth, dashboard/audit, export petugas, parent wajib level granular |
 | TASKS.md | 1.2 | Semua pertanyaan terbuka terjawab → lihat DECISIONS.md |
-| DECISIONS.md | 1.0 | Log keputusan product owner (mengikat) |
+| DECISIONS.md | 1.1 | + keputusan #7–#11 (approval, wilayah manual, minimap, fitur admin, token aktif utk proyek) |
 | AGENTS.md | 1.2 | Salin/symlink sebagai CLAUDE.md di root repo |

@@ -245,16 +245,30 @@ pm2 restart peta-backend
 
 ## 8. Backup & restore database
 
-Docker (volume `dbdata`):
+**Otomatis harian (disarankan)** — skrip `deploy/backup.sh` mem-backup DB (pg_dump gzip)
++ arsip volume storage (foto & layer), dengan rotasi 30 hari. Pasang cron di VPS:
+
 ```bash
-docker compose -f docker-compose.prod.yml exec db pg_dump -U peta peta > backup-$(date +%F).sql
-# restore ke instance baru:
-cat backup-2026-07-06.sql | docker compose -f docker-compose.prod.yml exec -T db psql -U peta peta
+chmod +x deploy/backup.sh
+crontab -e
+# tambahkan (backup jam 02:00, log ke file):
+0 2 * * * /opt/peta-fable/deploy/backup.sh >> /var/log/peta-backup.log 2>&1
 ```
 
-Non-Docker: `pg_dump`/`psql` biasa ke database `peta` lokal. Jadwalkan lewat cron harian
-(PRD §7 — "Backup DB harian"). Backup **foto & layer** (`backend/storage/` atau volume
-`backend_storage`) secara terpisah dari DB, seperti disebut di `docs/ARCHITECTURE.md`.
+Hasil di `<repo>/backups/`: `peta-db-<tanggal>.sql.gz` + `peta-storage-<tanggal>.tar.gz`.
+**Uji restore berkala** — backup yang tidak pernah diuji sama dengan tidak ada backup.
+
+Restore manual:
+```bash
+gunzip -c backups/peta-db-2026-07-10-0200.sql.gz | \
+  docker compose -f docker-compose.prod.yml exec -T db psql -U peta peta
+```
+
+Non-Docker (Opsi B): `pg_dump`/`psql` biasa ke database `peta` lokal + tar `backend/storage/`,
+dijadwalkan cron serupa (PRD §7 — "Backup DB harian").
+
+Health/readiness: container backend punya endpoint `GET /api/ready` (cek DB benar-benar
+terjangkau, dipakai healthcheck compose) selain `GET /api/health` (proses hidup).
 
 ## 9. Troubleshooting
 

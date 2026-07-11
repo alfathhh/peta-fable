@@ -93,10 +93,12 @@ export interface AuditLogRow {
 export interface InfraDetail extends InfraMarkerData {
   description: string | null;
   photo_url: string | null;
+  /** URL foto versi kecil (?size=thumb) untuk popup peta; fallback ke photo_url bila tidak ada. */
+  photo_thumb_url: string | null;
   gpsAccuracyM: number | null;
   region_names: Record<string, string>;
   gmaps_url: string;
-  idkab: string;
+  idkab: string | null;
   idkec: string | null;
   iddesa: string | null;
   idsls: string | null;
