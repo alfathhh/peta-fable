@@ -1,7 +1,15 @@
 import { prisma } from '../lib/prisma';
 import { cacheClear } from '../lib/cache';
-import { badRequest } from '../middlewares/errorHandler';
-import { LEVEL_TO_LENGTH, parentOf, type RegionLevel } from '../lib/regionId';
+import { badRequest, conflict, notFound } from '../middlewares/errorHandler';
+import { childLevelOf, LEVELS, LEVEL_TO_LENGTH, parentOf, type RegionLevel } from '../lib/regionId';
+
+const INFRA_REGION_COLUMN: Record<RegionLevel, 'idkab' | 'idkec' | 'iddesa' | 'idsls' | 'idsubsls'> = {
+  kab: 'idkab',
+  kec: 'idkec',
+  desa: 'iddesa',
+  sls: 'idsls',
+  subsls: 'idsubsls',
+};
 
 interface GeoFeature {
   type: 'Feature';
@@ -185,6 +193,35 @@ export async function listRegionUploads() {
     take: 50,
     include: { uploader: { select: { id: true, name: true, username: true } } },
   });
+}
+
+/** Hapus seluruh master wilayah pada satu level setelah memastikan tidak direferensikan. */
+export async function deleteRegionsByLevel(level: RegionLevel): Promise<{ level: RegionLevel; deleted: number }> {
+  const childLevel = childLevelOf(level);
+  const affectedProjectLevels = LEVELS.slice(LEVELS.indexOf(level));
+  const [regionCount, childCount, projectCount, infrastructureCount, processingCount] = await Promise.all([
+    prisma.region.count({ where: { level } }),
+    childLevel ? prisma.region.count({ where: { level: childLevel } }) : Promise.resolve(0),
+    prisma.project.count({ where: { regionLevel: { in: affectedProjectLevels }, deletedAt: null } }),
+    prisma.infrastructure.count({ where: { [INFRA_REGION_COLUMN[level]]: { not: null }, deletedAt: null } }),
+    prisma.regionUpload.count({ where: { level, status: 'processing' } }),
+  ]);
+
+  if (regionCount === 0) throw notFound(`Data wilayah level ${level} tidak ditemukan`);
+  if (processingCount > 0) throw conflict(`Data wilayah level ${level} sedang diproses`);
+  if (childCount > 0) {
+    throw conflict(`Hapus data wilayah level ${childLevel} terlebih dahulu (${childCount} wilayah masih tersimpan)`);
+  }
+  if (projectCount > 0) {
+    throw conflict(`Data wilayah level ${level} masih dipakai oleh ${projectCount} proyek aktif`);
+  }
+  if (infrastructureCount > 0) {
+    throw conflict(`Data wilayah level ${level} masih direferensikan oleh ${infrastructureCount} infrastruktur`);
+  }
+
+  const deleted = await prisma.region.deleteMany({ where: { level } });
+  cacheClear();
+  return { level, deleted: deleted.count };
 }
 
 export async function recoverInterruptedRegionUploads(): Promise<number> {

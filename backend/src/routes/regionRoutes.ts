@@ -104,3 +104,15 @@ regionRoutes.get('/admin/regions/uploads', requireRole('admin'), async (_req, re
     next(err);
   }
 });
+
+regionRoutes.delete('/admin/regions/:level', requireRole('admin'), mutationLimiter, async (req, res, next) => {
+  try {
+    const level = req.params.level as RegionLevel;
+    if (!(LEVELS as string[]).includes(level)) throw badRequest('Level tidak valid');
+    const result = await regionImport.deleteRegionsByLevel(level);
+    auditService.record(req.user, 'delete', 'regions', level, result);
+    ok(res, result);
+  } catch (err) {
+    next(err);
+  }
+});

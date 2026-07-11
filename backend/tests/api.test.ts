@@ -715,4 +715,24 @@ describe.skipIf(!dbUrl)('API (butuh DATABASE_URL_TEST)', () => {
       note: 'Terputus karena server dimulai ulang',
     });
   });
+
+  it('hapus wilayah hanya admin dan menolak level yang masih direferensikan', async () => {
+    expect((await request.delete('/api/admin/regions/kec')).status).toBe(401);
+    expect(
+      (await request.delete('/api/admin/regions/kec').set('Authorization', `Bearer ${petugasToken}`)).status,
+    ).toBe(403);
+
+    const blocked = await request.delete('/api/admin/regions/kec').set('Authorization', `Bearer ${adminToken}`);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.message).toContain('desa terlebih dahulu');
+
+    const { prisma } = await import('../src/lib/prisma');
+    await prisma.region.create({
+      data: { regionId: '1306010001000001', level: 'subsls', name: 'Sub-SLS untuk dihapus', parentId: '13060100010000' },
+    });
+    const deleted = await request.delete('/api/admin/regions/subsls').set('Authorization', `Bearer ${adminToken}`);
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.data).toMatchObject({ level: 'subsls', deleted: 1 });
+    expect(await prisma.region.count({ where: { level: 'subsls' } })).toBe(0);
+  });
 });

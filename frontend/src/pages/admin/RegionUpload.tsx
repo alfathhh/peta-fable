@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { Trash2, Upload } from 'lucide-react';
 import { regionApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
 import { Button, Select } from '../../components/ui';
@@ -23,6 +23,7 @@ export default function AdminRegionUpload() {
   const [level, setLevel] = useState<RegionLevel>('kec');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [history, setHistory] = useState<UploadRow[]>([]);
 
   const load = () => regionApi.adminUploads().then((rows) => setHistory(rows as UploadRow[])).catch(() => {});
@@ -63,6 +64,21 @@ export default function AdminRegionUpload() {
     }
   }
 
+  async function deleteLevel() {
+    const label = LEVEL_LABELS[level];
+    if (!confirm(`Hapus SEMUA data wilayah level ${label}? Tindakan ini tidak dapat dibatalkan.`)) return;
+    setDeleting(true);
+    try {
+      const result = await regionApi.adminDeleteLevel(level);
+      toast.success(`${result.deleted} wilayah level ${label} berhasil dihapus`);
+      void load();
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4">
       <section className="rounded-2xl bg-white p-4 shadow-sm">
@@ -92,6 +108,9 @@ export default function AdminRegionUpload() {
           </label>
           <Button onClick={() => void submit()} disabled={!file || uploading}>
             <Upload className="h-4 w-4" /> {uploading ? 'Memproses...' : 'Upload & Replace'}
+          </Button>
+          <Button variant="danger" onClick={() => void deleteLevel()} disabled={uploading || deleting}>
+            <Trash2 className="h-4 w-4" /> {deleting ? 'Menghapus...' : 'Hapus Level'}
           </Button>
         </div>
       </section>

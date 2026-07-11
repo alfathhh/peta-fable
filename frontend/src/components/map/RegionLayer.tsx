@@ -24,7 +24,7 @@ function colorFor(count: number, buckets: { from: number; to: number; color: str
 
 /**
  * Layer wilayah on-demand (PRD §5.2):
- * - tanpa wilayah aktif → outline kabupaten saja
+ * - tanpa wilayah aktif → seluruh kecamatan dalam kabupaten
  * - ada wilayah aktif → outline wilayah aktif + anak-anaknya
  * Layer lama SELALU dibuang sebelum render baru (hindari memory leak).
  */
@@ -69,13 +69,7 @@ export function RegionLayer({ onSelect }: { onSelect?: (regionId: string, name: 
 
     async function render() {
       try {
-        if (!activeRegion) {
-          const fc = await regionApi.geojson('kab', undefined, 'low');
-          if (cancelled || !map) return;
-          const layer = L.geoJSON(fc, { style: BASE_STYLE, interactive: false }).addTo(map);
-          layersRef.current.push(layer);
-          if (!choropleth) return; // default: outline kabupaten saja (hemat — PRD §5.2)
-        } else {
+        if (activeRegion) {
           // outline wilayah aktif
           const activeFc = await regionApi.geojson(activeRegion.level, activeRegion.region_id, detail);
           if (cancelled || !map) return;

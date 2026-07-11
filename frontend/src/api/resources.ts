@@ -53,6 +53,8 @@ export const regionApi = {
     return api.post('/admin/regions/upload', fd).then((r) => r.data.data);
   },
   adminUploads: () => api.get<{ data: unknown[] }>('/admin/regions/uploads').then((r) => r.data.data),
+  adminDeleteLevel: (level: string) =>
+    api.delete<{ data: { level: string; deleted: number } }>(`/admin/regions/${level}`).then((r) => r.data.data),
 };
 
 // ---------- categories ----------
