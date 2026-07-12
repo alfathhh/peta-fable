@@ -197,6 +197,16 @@ export async function listRegionUploads() {
   });
 }
 
+/** Jumlah master poligon yang saat ini aktif, terpisah dari riwayat upload. */
+export async function listActiveRegionCounts(): Promise<Array<{ level: RegionLevel; count: number }>> {
+  const grouped = await prisma.region.groupBy({
+    by: ['level'],
+    _count: { _all: true },
+  });
+
+  return grouped.map((row) => ({ level: row.level as RegionLevel, count: row._count._all }));
+}
+
 /** Hapus master poligon satu level tanpa cascade ke proyek atau infrastruktur. */
 export async function deleteRegionsByLevel(level: RegionLevel): Promise<{ level: RegionLevel; deleted: number }> {
   const [regionCount, processingCount] = await Promise.all([

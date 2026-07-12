@@ -105,6 +105,14 @@ regionRoutes.get('/admin/regions/uploads', requireRole('admin'), async (_req, re
   }
 });
 
+regionRoutes.get('/admin/regions/status', requireRole('admin'), async (_req, res, next) => {
+  try {
+    ok(res, await regionImport.listActiveRegionCounts());
+  } catch (err) {
+    next(err);
+  }
+});
+
 regionRoutes.delete('/admin/regions/:level', requireRole('admin'), mutationLimiter, async (req, res, next) => {
   try {
     const level = req.params.level as RegionLevel;

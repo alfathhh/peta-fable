@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, Upload } from 'lucide-react';
+import { Database, Trash2, Upload } from 'lucide-react';
 import { regionApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
 import { Button, Select } from '../../components/ui';
@@ -25,8 +25,16 @@ export default function AdminRegionUpload() {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [history, setHistory] = useState<UploadRow[]>([]);
+  const [activeCounts, setActiveCounts] = useState<Partial<Record<RegionLevel, number>>>({});
 
-  const load = () => regionApi.adminUploads().then((rows) => setHistory(rows as UploadRow[])).catch(() => {});
+  const load = () => Promise.all([
+    regionApi.adminUploads().then((rows) => setHistory(rows as UploadRow[])),
+    regionApi.adminStatus().then((rows) => {
+      const counts: Partial<Record<RegionLevel, number>> = {};
+      for (const row of rows) counts[row.level as RegionLevel] = row.count;
+      setActiveCounts(counts);
+    }),
+  ]).catch(() => {});
   useEffect(() => {
     void load();
   }, []);
@@ -48,6 +56,7 @@ export default function AdminRegionUpload() {
         const row = rows.find((h) => h.id === uploadId);
         if (row?.status === 'done') {
           toast.success(`Data wilayah level ${level} berhasil di-replace (${row.featureCount ?? row.feature_count} fitur)`);
+          void load();
           return;
         }
         if (row?.status === 'failed') {
@@ -120,7 +129,27 @@ export default function AdminRegionUpload() {
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-base font-semibold">Riwayat Upload</h2>
+        <div className="mb-3 flex items-center gap-2">
+          <Database className="h-4 w-4 text-blue-600" />
+          <h2 className="text-base font-semibold">Data Aktif Saat Ini</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {LEVELS.map((item) => (
+            <div key={item} className="rounded-xl border border-gray-200 px-3 py-2">
+              <div className="text-xs text-gray-500">{LEVEL_LABELS[item]}</div>
+              <div className="text-lg font-semibold text-gray-900">{activeCounts[item] ?? 0}</div>
+              <div className="text-[11px] text-gray-400">poligon aktif</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <h2 className="text-base font-semibold">Riwayat Upload</h2>
+        <p className="mb-3 text-xs text-gray-500">
+          Riwayat tetap disimpan setelah data dihapus. Status “Upload berhasil” berarti proses upload pernah selesai,
+          bukan data tersebut masih aktif.
+        </p>
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase text-gray-500">
             <tr>
@@ -149,7 +178,7 @@ export default function AdminRegionUpload() {
                     }`}
                     title={h.note ?? undefined}
                   >
-                    {h.status}
+                    {h.status === 'done' ? 'Upload berhasil' : h.status === 'failed' ? 'Gagal' : 'Diproses'}
                   </span>
                 </td>
               </tr>
