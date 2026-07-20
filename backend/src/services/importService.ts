@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { prisma } from '../lib/prisma';
 import { badRequest, conflict, notFound } from '../middlewares/errorHandler';
 import { parentIdsOf } from '../lib/regionId';
+import { assertWorkbookShape } from '../lib/importLimits';
 import { resolveRegionFromPoint } from './regionResolver';
 
 interface ParsedRow {
@@ -83,6 +84,7 @@ export async function validateImport(buffer: Buffer, userId: string) {
   }
   const sheet = wb.getWorksheet('Data') ?? wb.worksheets[0];
   if (!sheet) throw badRequest('Sheet Data tidak ditemukan');
+  assertWorkbookShape(wb.worksheets.length, Math.max(0, sheet.rowCount - 1));
 
   const categories = await prisma.category.findMany({ where: { isActive: true } });
   const catByName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c]));

@@ -1,20 +1,49 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Camera, Check, FileSpreadsheet, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Camera, Check, CheckCircle2, Clock3, FileSpreadsheet, MapPinOff, Pencil, Plus, Trash2, X, XCircle } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { categoryApi, infraApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
-import { Button, Input, LoadingState, Modal, Select, Textarea } from '../../components/ui';
+import { Button, IconButton, Input, LoadingState, Modal, Select, StatusBadge, Textarea } from '../../components/ui';
 import { PhotoEditor } from '../../components/PhotoEditor';
 import { MiniMapPicker } from '../../components/map/MiniMapPicker';
 import { compressPhoto } from '../../utils/photo';
 import { toast } from '../../stores/toastStore';
+import { getCategoryIcon } from '../../config/categoryIcons';
 import type { Category, InfraDetail } from '../../types';
 
+function ApprovalBadge({ status }: { status: InfraDetail['approvalStatus'] }) {
+  if (status === 'approved') return <StatusBadge tone="success"><CheckCircle2 className="h-3.5 w-3.5" /> Disetujui</StatusBadge>;
+  if (status === 'rejected') return <StatusBadge tone="danger"><XCircle className="h-3.5 w-3.5" /> Ditolak</StatusBadge>;
+  return <StatusBadge tone="warning"><Clock3 className="h-3.5 w-3.5" /> Menunggu</StatusBadge>;
+}
+
+function OutsideBadge() {
+  return <StatusBadge tone="warning"><MapPinOff className="h-3.5 w-3.5" /> Di luar wilayah</StatusBadge>;
+}
+
+function CategoryMark({ category }: { category: Pick<Category, 'name' | 'icon' | 'color'> }) {
+  const Icon = getCategoryIcon(category.icon);
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap text-xs font-semibold text-stone-700">
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ring-2 ring-white" style={{ backgroundColor: category.color }}>
+        <Icon className="h-[18px] w-[18px]" strokeWidth={2.3} />
+      </span>
+      {category.name}
+    </span>
+  );
+}
+
 export default function AdminInfrastructures() {
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState<InfraDetail[] | null>(null);
   const [meta, setMeta] = useState({ page: 1, total_pages: 1, total: 0 });
   const [categories, setCategories] = useState<Category[]>([]);
-  const [filter, setFilter] = useState({ q: '', category_id: '', is_outside_region: '', approval_status: '' });
+  const [filter, setFilter] = useState({
+    q: '',
+    category_id: '',
+    is_outside_region: searchParams.get('is_outside_region') ?? '',
+    approval_status: searchParams.get('approval_status') ?? '',
+  });
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<InfraDetail | null>(null);
   const [creating, setCreating] = useState(false);
@@ -185,7 +214,7 @@ export default function AdminInfrastructures() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Semua Infrastruktur ({meta.total})</h1>
         <div className="flex gap-2">
@@ -252,7 +281,28 @@ export default function AdminInfrastructures() {
         <LoadingState />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
+          <div className="space-y-3 lg:hidden">
+            {rows.map((r) => (
+              <article key={r.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><h2 className="truncate text-sm font-semibold text-stone-900">{r.name}</h2><p className="mt-1 font-mono text-xs text-stone-500">{r.lat.toFixed(5)}, {r.lng.toFixed(5)}</p></div>
+                  <CategoryMark category={r.category} />
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <ApprovalBadge status={r.approvalStatus} />
+                  {r.isOutsideRegion && <OutsideBadge />}
+                  <span className="text-xs text-stone-500">@{r.user?.username}</span>
+                </div>
+                <div className="mt-3 flex justify-end gap-1 border-t border-stone-100 pt-3">
+                  {r.approvalStatus !== 'approved' && <IconButton label={`ACC ${r.name}`} onClick={() => void setApproval(r, 'approved')}><Check className="h-4 w-4 text-emerald-700" /></IconButton>}
+                  {r.approvalStatus !== 'rejected' && <IconButton label={`Tolak ${r.name}`} variant="danger" onClick={() => void setApproval(r, 'rejected')}><X className="h-4 w-4" /></IconButton>}
+                  <IconButton label={`Edit ${r.name}`} onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></IconButton>
+                  <IconButton label={`Hapus ${r.name}`} variant="danger" onClick={() => void remove(r)}><Trash2 className="h-4 w-4" /></IconButton>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-xl bg-white shadow-sm lg:block">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                 <tr>
@@ -270,34 +320,19 @@ export default function AdminInfrastructures() {
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td className="px-4 py-3 font-medium">{r.name}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full px-2 py-0.5 text-xs text-white" style={{ background: r.category.color }}>
-                        {r.category.name}
-                      </span>
-                    </td>
+                    <td className="px-4 py-3"><CategoryMark category={r.category} /></td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {r.lat.toFixed(5)}, {r.lng.toFixed(5)}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{r.idsubsls ?? r.idsls ?? r.iddesa ?? r.idkec ?? r.idkab}</td>
                     <td className="px-4 py-3 text-xs">{r.user?.username}</td>
                     <td className="px-4 py-3">
-                      {r.isOutsideRegion && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">luar wilayah</span>
-                      )}
+                      {r.isOutsideRegion && <OutsideBadge />}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            r.approvalStatus === 'approved'
-                              ? 'bg-green-100 text-green-700'
-                              : r.approvalStatus === 'rejected'
-                                ? 'bg-red-100 text-red-600'
-                                : 'bg-amber-100 text-amber-700'
-                          }`}
-                        >
-                          {r.approvalStatus === 'approved' ? 'Di-ACC' : r.approvalStatus === 'rejected' ? 'Ditolak' : 'Menunggu'}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <ApprovalBadge status={r.approvalStatus} />
+                        <div className="flex items-center border-l border-stone-200 pl-1">
                         {r.approvalStatus !== 'approved' && (
                           <button
                             onClick={() => void setApproval(r, 'approved')}
@@ -316,6 +351,7 @@ export default function AdminInfrastructures() {
                             <X className="h-4 w-4" />
                           </button>
                         )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">

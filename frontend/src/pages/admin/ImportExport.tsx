@@ -61,7 +61,7 @@ export default function AdminImportExport() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <h1 className="mb-3 text-lg font-semibold">Export Data</h1>
         <ul className="divide-y">

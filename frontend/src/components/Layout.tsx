@@ -1,14 +1,39 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LogOut, Map, FolderKanban, KeyRound, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import {
+  ArrowUpDown,
+  Database,
+  FolderKanban,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  Map,
+  MapPinHouse,
+  Menu,
+  ScrollText,
+  Tags,
+  TicketCheck,
+  Users,
+  Waypoints,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { ToastContainer } from './ui';
 import { ErrorBoundary } from './ErrorBoundary';
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-    isActive ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+  `flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors ${
+    isActive ? 'bg-emerald-50 text-emerald-900' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
   }`;
+
+const adminGroups: [string, [string, string, LucideIcon][]][] = [
+  ['Utama', [['/admin/dashboard', 'Dashboard', LayoutDashboard], ['/admin/infrastruktur', 'Infrastruktur', MapPinHouse], ['/admin/proyek', 'Proyek', FolderKanban]]],
+  ['Kelola', [['/admin/pengguna', 'Pengguna', Users], ['/admin/kategori', 'Kategori', Tags], ['/admin/kegiatan', 'Kegiatan & Token', TicketCheck]]],
+  ['Sistem', [['/admin/wilayah', 'Data Wilayah', Database], ['/admin/import-export', 'Import/Export', ArrowUpDown], ['/admin/audit', 'Audit Log', ScrollText]]],
+];
+
+const NavIcon = ({ icon: Icon }: { icon: LucideIcon }) => <Icon aria-hidden="true" className="h-[17px] w-[17px] shrink-0" strokeWidth={1.75} />;
 
 export function Layout() {
   const { user, logout } = useAuthStore();
@@ -18,75 +43,108 @@ export function Layout() {
   const links = (
     <>
       <NavLink to="/" className={navClass} onClick={() => setMenuOpen(false)} end>
-        <Map className="h-4 w-4" /> Peta
+        <NavIcon icon={Map} /> Peta
       </NavLink>
       {user?.role === 'petugas' && (
         <>
           <NavLink to="/kegiatan" className={navClass} onClick={() => setMenuOpen(false)}>
-            <KeyRound className="h-4 w-4" /> Kegiatan Saya
+            <NavIcon icon={KeyRound} /> Kegiatan Saya
           </NavLink>
           <NavLink to="/proyek" className={navClass} onClick={() => setMenuOpen(false)}>
-            <FolderKanban className="h-4 w-4" /> Proyek
+            <NavIcon icon={FolderKanban} /> Proyek
           </NavLink>
         </>
       )}
       {user?.role === 'admin' && (
-        <>
-          {[
-            ['/admin/dashboard', 'Dashboard'],
-            ['/admin/pengguna', 'Pengguna'],
-            ['/admin/kategori', 'Kategori'],
-            ['/admin/kegiatan', 'Kegiatan & Token'],
-            ['/admin/infrastruktur', 'Infrastruktur'],
-            ['/admin/proyek', 'Proyek'],
-            ['/admin/wilayah', 'Data Wilayah'],
-            ['/admin/import-export', 'Import/Export'],
-            ['/admin/audit', 'Audit Log'],
-          ].map(([to, label]) => (
-            <NavLink key={to} to={to} className={navClass} onClick={() => setMenuOpen(false)}>
-              {label}
-            </NavLink>
+        <div className="space-y-4">
+          {adminGroups.map(([group, items]) => (
+            <div key={group}>
+              <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[.16em] text-stone-400">{group}</p>
+              <div className="space-y-1">{items.map(([to, label, Icon]) => <NavLink key={to} to={to} className={navClass} onClick={() => setMenuOpen(false)}><NavIcon icon={Icon} /> {label}</NavLink>)}</div>
+            </div>
           ))}
-        </>
+        </div>
       )}
     </>
   );
 
+  function exit() {
+    logout();
+    navigate('/login');
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const prior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const close = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('keydown', close);
+    return () => { document.body.style.overflow = prior; document.removeEventListener('keydown', close); };
+  }, [menuOpen]);
+
+  const brand = (
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800">
+        <Waypoints className="h-5 w-5" strokeWidth={1.75} />
+      </span>
+      <div className="min-w-0 leading-tight">
+        <h1 className="truncate text-sm font-semibold tracking-tight text-stone-900">Peta Tematik</h1>
+        <p className="truncate text-[10px] font-medium uppercase tracking-[0.14em] text-stone-400">Padang Pariaman</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0 bg-[#f4f5f2]">
       <ToastContainer />
-      <header className="z-[1000] flex items-center justify-between border-b bg-white px-4 py-2 shadow-sm">
-        <div className="flex items-center gap-3">
-          <button className="rounded p-1.5 hover:bg-gray-100 lg:hidden" onClick={() => setMenuOpen((v) => !v)} aria-label="Menu">
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-          <h1 className="text-sm font-bold sm:text-base">Peta Tematik Padang Pariaman</h1>
-        </div>
-        <nav className="hidden items-center gap-1 lg:flex">{links}</nav>
-        <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-gray-500 sm:block">
-            {user?.name} <span className="rounded bg-gray-100 px-1.5 py-0.5 font-medium uppercase">{user?.role}</span>
-          </span>
-          <button
-            onClick={() => {
-              logout();
-              navigate('/login');
-            }}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-            title="Keluar"
-          >
-            <LogOut className="h-4 w-4" />
+
+      <aside className="relative z-10 hidden h-full w-56 shrink-0 flex-col border-r border-stone-200 bg-white shadow-[4px_0_18px_rgba(24,33,28,0.04)] lg:flex">
+        <div className="flex h-16 items-center border-b border-stone-100 px-4">{brand}</div>
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">{links}</nav>
+        <div className="border-t border-stone-100 p-3">
+          <div className="mb-2 min-w-0 px-2">
+            <p className="truncate text-xs font-medium text-stone-800">{user?.name}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{user?.role}</p>
+          </div>
+          <button onClick={exit} className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-stone-500 hover:bg-red-50 hover:text-red-600">
+            <LogOut className="h-[17px] w-[17px]" strokeWidth={1.75} /> Keluar
           </button>
         </div>
-      </header>
-      {menuOpen && (
-        <nav className="z-[1000] flex flex-col gap-1 border-b bg-white p-3 lg:hidden">{links}</nav>
-      )}
-      <main className="min-h-0 flex-1">
-        <ErrorBoundary>
-          <Outlet />
-        </ErrorBoundary>
-      </main>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="z-[1000] flex h-14 shrink-0 items-center justify-between border-b border-stone-200 bg-white px-3 lg:hidden">
+          <button className="flex h-10 w-10 items-center justify-center rounded-lg text-stone-600 hover:bg-stone-100" onClick={() => setMenuOpen(true)} aria-label="Buka menu">
+            <Menu className="h-5 w-5" />
+          </button>
+          {brand}
+          <button onClick={exit} className="flex h-10 w-10 items-center justify-center rounded-lg text-stone-500 hover:bg-red-50 hover:text-red-600" title="Keluar" aria-label="Keluar">
+            <LogOut className="h-5 w-5" />
+          </button>
+        </header>
+
+        {menuOpen && (
+          <div className="fixed inset-0 z-[1400] flex lg:hidden">
+            <button className="absolute inset-0 bg-stone-950/35 backdrop-blur-[1px]" onClick={() => setMenuOpen(false)} aria-label="Tutup menu" />
+            <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-2xl">
+              <div className="flex h-16 items-center justify-between border-b border-stone-100 px-4">
+                {brand}
+                <button className="rounded-lg p-2 text-stone-500 hover:bg-stone-100" onClick={() => setMenuOpen(false)} aria-label="Tutup menu">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <nav className="flex-1 space-y-1 overflow-y-auto p-3">{links}</nav>
+              <div className="border-t border-stone-100 p-3 text-xs text-stone-500">{user?.name} · {user?.role}</div>
+            </aside>
+          </div>
+        )}
+
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
+        </main>
+      </div>
     </div>
   );
 }

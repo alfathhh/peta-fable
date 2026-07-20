@@ -39,7 +39,7 @@ export default function AdminProjects() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4">
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
       <h1 className="text-lg font-semibold">Semua Proyek</h1>
       {projects === null ? (
         <LoadingState />

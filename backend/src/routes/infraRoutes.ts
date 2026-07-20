@@ -9,7 +9,7 @@ import { adminCreateInfraSchema, adminInfraQuerySchema, approvalSchema, createIn
 import * as infraService from '../services/infraService';
 import * as auditService from '../services/auditService';
 import { noStore } from '../middlewares/noStore';
-import { notFound } from '../middlewares/errorHandler';
+import { badRequest, notFound } from '../middlewares/errorHandler';
 import { STORAGE_ROOT } from '../services/layerService';
 import { mutationLimiter } from '../middlewares/rateLimit';
 
@@ -42,6 +42,7 @@ infraRoutes.get('/infrastructures', async (req, res, next) => {
 
 infraRoutes.get('/infrastructures/:id/photo', noStore, async (req, res, next) => {
   try {
+    if (req.query.size !== undefined && req.query.size !== 'thumb' && req.query.size !== 'full') throw badRequest('size harus full atau thumb');
     const size = req.query.size === 'thumb' ? 'thumb' : 'full';
     const photoPath = await infraService.getInfrastructurePhotoPath(req.params.id, req.user!, size);
     const absolutePath = path.resolve(STORAGE_ROOT, photoPath);
@@ -62,7 +63,7 @@ infraRoutes.get('/infrastructures/:id', async (req, res, next) => {
   }
 });
 
-infraRoutes.post('/infrastructures', mutationLimiter, photoUpload.single('photo'), async (req, res, next) => {
+infraRoutes.post('/infrastructures', requireRole('petugas'), mutationLimiter, photoUpload.single('photo'), async (req, res, next) => {
   try {
     const body = createInfraSchema.parse(req.body);
     if (req.file) await assertIsImage(req.file.buffer);

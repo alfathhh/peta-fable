@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import ExcelJS from 'exceljs';
+import { assertWorkbookShape } from '../lib/importLimits';
 import { prisma } from '../lib/prisma';
 import { badRequest, conflict, notFound } from '../middlewares/errorHandler';
 
@@ -50,6 +51,7 @@ export async function validateUserImport(buffer: Buffer, userId: string) {
   }
   const sheet = wb.getWorksheet('Data') ?? wb.worksheets[0];
   if (!sheet) throw badRequest('Sheet Data tidak ditemukan');
+  assertWorkbookShape(wb.worksheets.length, Math.max(0, sheet.rowCount - 1));
 
   const rows: UserRow[] = [];
   sheet.eachRow((row, rowNumber) => {
@@ -97,9 +99,9 @@ export async function validateUserImport(buffer: Buffer, userId: string) {
   };
 }
 
-export async function commitUserImport(uploadId: string) {
+export async function commitUserImport(uploadId: string, userId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(uploadId)) throw notFound('Upload pengguna tidak ditemukan');
-  const job = await prisma.importJob.findUnique({ where: { id: uploadId } });
+  const job = await prisma.importJob.findFirst({ where: { id: uploadId, createdBy: userId } });
   if (!job || job.module !== 'users') throw notFound('Upload pengguna tidak ditemukan');
   if (job.status === 'committed' && job.result) return job.result as { saved: number; failed: number };
   const rows = (job.rows as unknown as UserRow[]).filter((row) => row.errors.length === 0);
@@ -107,7 +109,7 @@ export async function commitUserImport(uploadId: string) {
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.$executeRaw`
       UPDATE import_jobs SET status = 'committing', updated_at = timezone('utc', now())
-      WHERE id = ${uploadId} AND module = 'users' AND status = 'validated';
+      WHERE id = ${uploadId} AND created_by = ${userId} AND module = 'users' AND status = 'validated';
     `;
     if (claimed === 0) throw conflict('Import sedang diproses');
     for (const row of rows) {

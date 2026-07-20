@@ -332,7 +332,7 @@ export function InfraForm({
   const SelectedIcon = selectedCat ? getCategoryIcon(selectedCat.icon) : null;
 
   return (
-    <form onSubmit={submit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-5 pb-16">
       {/* foto: maks 1, kamera/galeri, editor crop/zoom, dikompres di client */}
       <div>
         <span className="mb-1 block text-sm font-medium text-gray-700">Foto (opsional, maks 1)</span>
@@ -433,11 +433,11 @@ export function InfraForm({
           </p>
         )}
         {!isEdit && !isAdmin && (
-          <div className="mt-2 space-y-2 rounded-lg border border-blue-100 bg-blue-50 p-3">
+          <div className="mt-2 space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold text-blue-900">Kalibrasi GPS 10 detik</p>
-                <p className="text-xs text-blue-700">Menggabungkan beberapa sampel GPS untuk menstabilkan titik.</p>
+                <p className="text-xs font-semibold text-emerald-900">Kalibrasi GPS 10 detik</p>
+                <p className="text-xs text-emerald-700">Menggabungkan beberapa sampel GPS untuk menstabilkan titik.</p>
               </div>
               <Button type="button" variant="secondary" disabled={calibrating || !gps} onClick={startCalibration}>
                 {calibrating ? `${calibrationSeconds} dtk` : 'Kalibrasi'}
@@ -504,13 +504,15 @@ export function InfraForm({
 
       <Textarea label="Deskripsi" value={description ?? ''} onChange={(e) => setDescription(e.target.value)} />
 
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={saving || !name || !categoryId || !coords || (regionMode === 'manual' && !manualRegion.idsls)}
-      >
-        {saving ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Simpan Infrastruktur'}
-      </Button>
+      <div className="sticky -bottom-5 z-10 -mx-5 border-t border-stone-200 bg-white/95 p-4 backdrop-blur">
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={saving || !name || !categoryId || !coords || (regionMode === 'manual' && !manualRegion.idsls)}
+        >
+          {saving ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Simpan Infrastruktur'}
+        </Button>
+      </div>
 
       <PhotoEditor src={editorSrc} open={editorOpen} onClose={() => setEditorOpen(false)} onDone={(f) => void onCropped(f)} />
     </form>

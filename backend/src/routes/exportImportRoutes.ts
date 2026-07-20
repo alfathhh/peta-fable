@@ -111,7 +111,7 @@ exportImportRoutes.post('/admin/import/users/commit', async (req, res, next) => 
   try {
     const uploadId = String(req.body.upload_id ?? '');
     if (!uploadId) throw badRequest('upload_id wajib diisi');
-    const result = await userImportService.commitUserImport(uploadId);
+    const result = await userImportService.commitUserImport(uploadId, req.user!.sub);
     auditService.record(req.user, 'import-commit', 'user', uploadId, { saved: result.saved, failed: result.failed });
     ok(res, result);
   } catch (err) { next(err); }

@@ -41,7 +41,7 @@ export default function AdminAuditLogs() {
   }, [page, entity]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-4">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Audit Log ({meta.total})</h1>
         <select

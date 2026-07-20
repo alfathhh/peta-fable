@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
+import multer from 'multer';
 
 export class AppError extends Error {
   status: number;
@@ -32,9 +33,8 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     res.status(err.status).json({ message: err.message, ...(err.errors ? { errors: err.errors } : {}) });
     return;
   }
-  // multer file too large
-  if (typeof err === 'object' && err !== null && (err as { code?: string }).code === 'LIMIT_FILE_SIZE') {
-    res.status(422).json({ message: 'Ukuran file melebihi batas' });
+  if (err instanceof multer.MulterError) {
+    res.status(422).json({ message: err.code === 'LIMIT_FILE_SIZE' ? 'Ukuran file melebihi batas' : 'File upload tidak valid' });
     return;
   }
   console.error(err);

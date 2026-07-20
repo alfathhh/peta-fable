@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Download, Plus, Pencil, Trash2, Upload } from 'lucide-react';
 import { downloadBlob, importApi, userApi } from '../../api/resources';
 import { apiErrorMessage } from '../../api/client';
-import { Button, Input, LoadingState, Modal, Select } from '../../components/ui';
+import { Button, EmptyState, IconButton, Input, LoadingState, Modal, PageHeader, Select, StatusBadge, TableShell } from '../../components/ui';
 import { toast } from '../../stores/toastStore';
 import { formatDateTime } from '../../utils/format';
 import type { User } from '../../types';
@@ -104,10 +104,8 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Manajemen Pengguna</h1>
-        <div className="flex flex-wrap gap-2">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <PageHeader eyebrow="Administrasi" title="Pengguna" description="Kelola akun, peran, dan akses aplikasi." actions={<div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => void downloadBlob('/admin/import/users/template')}>
             <Download className="h-4 w-4" /> Template XLSX
           </Button>
@@ -118,8 +116,7 @@ export default function AdminUsers() {
             }} />
           </label>
           <Button onClick={openCreate}><Plus className="h-4 w-4" /> Tambah User</Button>
-        </div>
-      </div>
+        </div>} />
 
       {importPreview && (
         <div className="rounded-xl border bg-white p-3 text-sm shadow-sm">
@@ -131,8 +128,14 @@ export default function AdminUsers() {
 
       {users === null ? (
         <LoadingState />
+      ) : users.length === 0 ? (
+        <EmptyState text="Belum ada pengguna." />
       ) : (
-        <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
+        <>
+        <div className="space-y-3 sm:hidden">
+          {users.map((u) => <div key={u.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-stone-900">{u.name}</p><p className="mt-0.5 font-mono text-xs text-stone-500">@{u.username}</p></div><StatusBadge tone={u.isActive ? 'success' : 'neutral'}>{u.isActive ? 'Aktif' : 'Nonaktif'}</StatusBadge></div><div className="mt-3 flex items-center justify-between border-t border-stone-100 pt-3"><span className="text-xs font-semibold uppercase tracking-wide text-stone-500">{u.role}</span><div className="flex"><IconButton label={`Edit ${u.name}`} onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></IconButton><IconButton label={`Hapus ${u.name}`} variant="danger" onClick={() => void remove(u)}><Trash2 className="h-4 w-4" /></IconButton></div></div></div>)}
+        </div>
+        <div className="hidden sm:block"><TableShell>
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
               <tr>
@@ -153,27 +156,26 @@ export default function AdminUsers() {
                   <td className="px-4 py-3">
                     <button
                       onClick={() => void toggleActive(u)}
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        u.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'
-                      }`}
+                      className="rounded-full"
                     >
-                      {u.isActive ? 'Aktif' : 'Nonaktif'}
+                      <StatusBadge tone={u.isActive ? 'success' : 'neutral'}>{u.isActive ? 'Aktif' : 'Nonaktif'}</StatusBadge>
                     </button>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{formatDateTime(u.lastLoginAt)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => openEdit(u)} className="rounded p-1.5 text-gray-400 hover:text-blue-600" title="Edit">
+                    <IconButton label={`Edit ${u.name}`} onClick={() => openEdit(u)}>
                       <Pencil className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => void remove(u)} className="rounded p-1.5 text-gray-400 hover:text-red-600" title="Hapus">
+                    </IconButton>
+                    <IconButton label={`Hapus ${u.name}`} variant="danger" onClick={() => void remove(u)}>
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </IconButton>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </TableShell></div>
+        </>
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit User' : 'Tambah User'}>

@@ -58,14 +58,18 @@ export interface RegionStat {
 
 export interface DashboardData {
   totals: {
-    users: number;
+    active_officers: number;
     infrastructures: number;
+    approved: number;
     pending_approval: number;
+    rejected: number;
     outside_region: number;
+    added_7d: number;
     active_projects: number;
     activities: number;
     active_tokens: number;
   };
+  coverage: { total_kecamatan: number; covered_kecamatan: number };
   by_category: { category_id: string; name: string; icon: string; color: string; count: number }[];
   by_kecamatan: { region_id: string; name: string; count: number }[];
   latest: {

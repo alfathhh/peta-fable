@@ -92,7 +92,7 @@ export default function AdminActivitiesTokens() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Kegiatan</h1>

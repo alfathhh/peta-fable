@@ -6,14 +6,91 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .app-page {
+    @apply mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:p-8;
+  }
+
+  main table {
+    @apply w-full text-sm;
+  }
+
+  main thead {
+    @apply bg-stone-50/80 text-left text-xs uppercase tracking-wide text-stone-500;
+  }
+
+  main th,
+  main td {
+    @apply px-4 py-3;
+  }
+
+  main tbody tr {
+    @apply border-t border-stone-100 transition-colors hover:bg-stone-50/60;
+  }
+}
+
 html,
 body,
 #root {
   height: 100%;
 }
 
+:root {
+  --canvas: #f4f5f2;
+  --surface: #ffffff;
+  --surface-raised: #fafaf8;
+  --border: #e4e7e1;
+  --border-strong: #d5d9d1;
+  --accent: #087f5b;
+  --accent-hover: #066b4c;
+  --accent-soft: #e9f7f1;
+  --text: #18211c;
+  --text-muted: #667069;
+}
+
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  @apply antialiased;
+}
+
+::selection {
+  background: #bfe8d7;
+  color: #10251c;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* Marker divIcon kategori (SVG lucide) */
@@ -62,6 +139,20 @@ body {
 }
 .region-label::before {
   display: none;
+}
+
+@media (max-width: 639px) {
+  /* ponytail: permanent region labels exceed a 360px map; add collision-aware labels if mobile names become essential. */
+  .region-label {
+    display: none;
+  }
+
+  .leaflet-control-zoom a {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+    line-height: 40px;
+  }
 }
 
 /* Dot lokasi GPS */

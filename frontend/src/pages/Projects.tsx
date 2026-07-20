@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Download, FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { activityApi, downloadBlob, projectApi } from '../api/resources';
 import { apiErrorMessage } from '../api/client';
-import { Button, EmptyState, Input, LoadingState, Modal, Select } from '../components/ui';
+import { Button, EmptyState, ErrorState, IconButton, Input, LoadingState, Modal, PageHeader, Panel, Select, StatusBadge } from '../components/ui';
 import { RegionCascade } from '../components/filters/RegionCascade';
 import { toast } from '../stores/toastStore';
 import { formatDate } from '../utils/format';
@@ -17,8 +17,9 @@ export default function Projects() {
   const [activityId, setActivityId] = useState('');
   const [region, setRegion] = useState<{ region_id: string; level: string; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
 
-  const load = () => projectApi.my().then(setProjects).catch(() => setProjects([]));
+  const load = () => { setError(false); projectApi.my().then(setProjects).catch(() => { setProjects([]); setError(true); }); };
   useEffect(() => {
     void load();
     activityApi
@@ -58,12 +59,8 @@ export default function Projects() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="flex items-center gap-2 text-lg font-semibold">
-          <FolderKanban className="h-5 w-5 text-blue-600" /> Proyek Saya
-        </h1>
-        <div className="flex gap-2">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <PageHeader eyebrow="Area petugas" title="Proyek Saya" description="Buka wilayah kerja dan kelola pendataan infrastruktur." actions={<>
           <Button
             variant="secondary"
             onClick={() => downloadBlob('/my/export/infrastructures', { format: 'xlsx' }).catch(() => toast.error('Gagal export'))}
@@ -74,29 +71,33 @@ export default function Projects() {
           <Button onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" /> Proyek Baru
           </Button>
-        </div>
-      </div>
+      </>} />
 
       {projects === null ? (
         <LoadingState />
+      ) : error ? (
+        <ErrorState onRetry={load} />
       ) : projects.length === 0 ? (
         <EmptyState text="Belum ada proyek. Buat proyek baru untuk mulai mendata." />
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {projects.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm">
-              <Link to={`/proyek/${p.id}`} className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-blue-700 hover:underline">{p.name}</p>
-                <p className="text-xs text-gray-500">
+            <li key={p.id}>
+              <Panel className="group flex h-full items-start gap-3 p-4 transition hover:border-emerald-200 hover:shadow-md">
+              <Link to={`/proyek/${p.id}`} className="min-w-0 flex-1 py-1">
+                <div className="mb-3 flex items-center justify-between gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50"><FolderKanban className="h-4 w-4 text-emerald-700" /></span><StatusBadge tone="info">{p._count?.infrastructures ?? 0} titik</StatusBadge></div>
+                <p className="truncate text-sm font-semibold text-stone-900 group-hover:text-emerald-800">{p.name}</p>
+                <p className="mt-1 text-xs leading-relaxed text-stone-500">
                   {p.activity?.name} · {p.region_name} ({p.regionLevel}) · dibuat {formatDate(p.createdAt)}
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="mt-1 text-xs text-stone-400">
                   {p._count?.infrastructures ?? 0} infrastruktur · {p._count?.layers ?? 0} layer
                 </p>
               </Link>
-              <button onClick={() => void remove(p)} className="rounded p-2 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Hapus">
+              <IconButton label={`Hapus ${p.name}`} variant="danger" onClick={() => void remove(p)}>
                 <Trash2 className="h-4 w-4" />
-              </button>
+              </IconButton>
+              </Panel>
             </li>
           ))}
         </ul>
@@ -113,6 +114,7 @@ export default function Projects() {
               </option>
             ))}
           </Select>
+          {activities.length === 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Belum ada kegiatan aktif. <Link to="/kegiatan" className="font-semibold underline">Klaim token kegiatan dulu</Link>.</div>}
           <div>
             <p className="mb-1 text-sm font-medium text-gray-700">Wilayah proyek</p>
             <p className="mb-2 text-xs text-gray-500">
@@ -120,7 +122,7 @@ export default function Projects() {
             </p>
             <RegionCascade minLevel="kec" onChange={setRegion} />
             {region && (
-              <p className="mt-2 rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
+              <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
                 Terpilih: {region.name} ({region.region_id})
               </p>
             )}

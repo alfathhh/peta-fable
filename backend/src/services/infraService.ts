@@ -8,6 +8,7 @@ import { levelOf } from '../lib/regionId';
 import { isOutsideRegion, resolveRegionFromPoint } from './regionResolver';
 import { assertProjectWritable, getOwnedProject } from './projectService';
 import { STORAGE_ROOT } from './layerService';
+import { sanitizeInfrastructure } from '../lib/sanitize';
 
 const INFRA_DIR = path.join(STORAGE_ROOT, 'infra');
 
@@ -148,7 +149,7 @@ export async function getInfrastructure(id: string, user: { sub: string; role: s
   const regionNames = Object.fromEntries(regions.map((r) => [r.level, r.name]));
 
   return {
-    ...infra,
+    ...sanitizeInfrastructure(infra),
     photo_url: photoUrl(infra.photoPath),
     photo_thumb_url: photoThumbUrl(infra.photoPath),
     region_names: regionNames,
@@ -254,9 +255,7 @@ export async function createInfrastructure(
 ) {
   const project = await getOwnedProject(input.project_id, user); // 404 bila bukan miliknya
   await assertProjectWritable(project, user);
-  if (user.role !== 'admin' && (input.idsls || input.idsubsls)) {
-    throw badRequest('Wilayah petugas ditentukan otomatis dari koordinat GPS');
-  }
+
   const category = await prisma.category.findUnique({ where: { id: input.category_id } });
   if (!category || !category.isActive) {
     throw badRequest('Kategori tidak tersedia', { category_id: ['Pilih kategori yang masih aktif'] });
@@ -302,7 +301,7 @@ export async function createInfrastructure(
     });
 
     return {
-      infra: { ...infra, photoPath, photo_url: photoUrl(photoPath), photo_thumb_url: photoThumbUrl(photoPath) },
+      infra: { ...sanitizeInfrastructure(infra), photo_url: photoUrl(photoPath), photo_thumb_url: photoThumbUrl(photoPath) },
       warning: outside ? 'Titik berada di luar wilayah proyek. Data tetap disimpan dengan penanda.' : undefined,
     };
   } catch (err) {
@@ -323,8 +322,8 @@ export async function adminCreateInfrastructure(
   let photoPath: string | null = null;
   try {
     if (photo) photoPath = await savePhoto(id, photo);
-    const infra = await prisma.infrastructure.create({
-      data: {
+    const infra = await prisma.$transaction(async (tx) => {
+      const created = await tx.infrastructure.create({ data: {
         id, name: input.name, categoryId: input.category_id, description: input.description ?? null,
         lat: input.lat, lng: input.lng, photoPath,
         idkab: resolved.idkab, idkec: resolved.idkec, iddesa: resolved.iddesa,
@@ -332,11 +331,13 @@ export async function adminCreateInfrastructure(
         isOutsideRegion: resolved.idkab !== '1306', userId, source: 'manual', approvalStatus: 'approved',
       },
       include: { category: categorySelect },
-    });
-    await prisma.$executeRaw`
+      });
+      await tx.$executeRaw`
       UPDATE infrastructures SET geom = ST_SetSRID(ST_MakePoint(${input.lng}, ${input.lat}), 4326) WHERE id = ${id};
-    `;
-    return { ...infra, photo_url: photoUrl(photoPath), photo_thumb_url: photoThumbUrl(photoPath) };
+      `;
+      return created;
+    });
+    return { ...sanitizeInfrastructure(infra), photo_url: photoUrl(photoPath), photo_thumb_url: photoThumbUrl(photoPath) };
   } catch (err) {
     removePhoto(photoPath);
     throw err;
@@ -389,7 +390,14 @@ export async function updateInfrastructure(
   let coordUpdate: { lat: number; lng: number } | null = null;
   let regionUpdate: Record<string, string | null | boolean> = {};
 
-  // Koreksi wilayah manual (pemilik/admin): idsls wajib bila diisi, idsubsls opsional
+  if ((input.lat !== undefined || input.lng !== undefined) && (input.lat === undefined || input.lng === undefined)) {
+    throw badRequest('lat dan lng harus dikirim bersamaan');
+  }
+  if (input.lat !== undefined && input.idsls !== undefined) {
+    throw badRequest('Koordinat dan wilayah manual tidak boleh diubah bersamaan');
+  }
+
+  // Koreksi wilayah manual: idsls wajib bila diisi, idsubsls opsional
   if (input.idsls) {
     const manual = await resolveManualRegion(input.idsls, input.idsubsls);
     regionUpdate = {
@@ -408,9 +416,7 @@ export async function updateInfrastructure(
   // Geser koordinat via minimap (admin): wilayah di-resolve ulang dari titik baru
   if (input.lat !== undefined && input.lng !== undefined) {
     coordUpdate = { lat: input.lat, lng: input.lng };
-    if (!input.idsls) {
-      // tanpa pilihan manual → auto-detect ulang dari koordinat baru
-      const resolved = await resolveRegionFromPoint(input.lat, input.lng);
+    const resolved = await resolveRegionFromPoint(input.lat, input.lng);
       regionUpdate = {
         idkab: resolved.idkab,
         idkec: resolved.idkec,
@@ -422,7 +428,6 @@ export async function updateInfrastructure(
         const project = await prisma.project.findUnique({ where: { id: infra.projectId } });
         if (project) regionUpdate.isOutsideRegion = isOutsideRegion(resolved, project.regionId);
       } else regionUpdate.isOutsideRegion = resolved.idkab !== '1306';
-    }
   }
 
   let photoPath: string | undefined;
@@ -430,8 +435,7 @@ export async function updateInfrastructure(
     if (photo) photoPath = await savePhoto(id, photo);
     const publicContentChanged =
       input.name !== undefined || input.category_id !== undefined || input.description !== undefined || photo !== undefined;
-    const requiresReapproval =
-      user.role === 'petugas' && publicContentChanged && infra.approvalStatus !== 'pending';
+    const requiresReapproval = user.role === 'petugas' && publicContentChanged;
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.infrastructure.update({
         where: { id },
@@ -454,7 +458,7 @@ export async function updateInfrastructure(
       return result;
     });
     if (photoPath !== undefined) removePhoto(infra.photoPath);
-    return { ...updated, photo_url: photoUrl(updated.photoPath), photo_thumb_url: photoThumbUrl(updated.photoPath) };
+    return { ...sanitizeInfrastructure(updated), photo_url: photoUrl(updated.photoPath), photo_thumb_url: photoThumbUrl(updated.photoPath) };
   } catch (err) {
     removePhoto(photoPath ?? null);
     throw err;
@@ -512,13 +516,13 @@ export async function adminListInfrastructures(filters: {
         user: { select: { id: true, name: true, username: true } },
         project: { select: { id: true, name: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * perPage,
       take: perPage,
     }),
   ]);
   return {
-    rows: rows.map((r) => ({ ...r, photo_url: photoUrl(r.photoPath), photo_thumb_url: photoThumbUrl(r.photoPath) })),
+    rows: rows.map((r) => ({ ...sanitizeInfrastructure(r), photo_url: photoUrl(r.photoPath), photo_thumb_url: photoThumbUrl(r.photoPath) })),
     meta: { page, per_page: perPage, total, total_pages: Math.ceil(total / perPage) },
   };
 }

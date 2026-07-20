@@ -93,7 +93,7 @@ export default function AdminRegionUpload() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <h1 className="mb-1 text-lg font-semibold">Update GeoJSON Wilayah</h1>
         <p className="mb-4 text-sm text-gray-500">

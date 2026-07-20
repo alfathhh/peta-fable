@@ -43,6 +43,10 @@ export async function createToken(input: { activity_id: string; expires_at: Date
 export async function updateToken(id: string, input: { expires_at?: Date; is_active?: boolean; max_claims?: number | null }) {
   const token = await prisma.activityToken.findUnique({ where: { id } });
   if (!token) throw notFound('Token tidak ditemukan');
+  if (input.expires_at && input.expires_at.getTime() <= Date.now()) throw badRequest('Tanggal kedaluwarsa harus di masa depan');
+  if (input.max_claims !== undefined && input.max_claims !== null && input.max_claims < token.claimsCount) {
+    throw badRequest(`Kuota tidak boleh lebih kecil dari ${token.claimsCount} klaim yang sudah digunakan`);
+  }
   return prisma.activityToken.update({
     where: { id },
     data: {

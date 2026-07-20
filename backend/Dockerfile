@@ -9,7 +9,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
-RUN npm ci --workspace=backend --include-workspace-root
+# postinstall prisma generate butuh schema, yang baru disalin pada langkah berikutnya.
+RUN npm ci --workspace=backend --include-workspace-root --ignore-scripts
 
 COPY backend backend
 WORKDIR /app/backend

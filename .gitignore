@@ -13,3 +13,4 @@ data/*.json
 
 peta/
 *.geojson
+DEPLOY-NOTES.txt

@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { KeyRound } from 'lucide-react';
+import { CalendarCheck, KeyRound } from 'lucide-react';
 import { activityApi } from '../api/resources';
 import { apiErrorMessage } from '../api/client';
-import { Button, EmptyState, Input, LoadingState } from '../components/ui';
+import { Button, EmptyState, ErrorState, Input, LoadingState, PageHeader, Panel, StatusBadge } from '../components/ui';
 import { toast } from '../stores/toastStore';
 import { formatDateTime } from '../utils/format';
 import type { MyActivity } from '../types';
@@ -11,8 +11,9 @@ export default function MyActivities() {
   const [activities, setActivities] = useState<MyActivity[] | null>(null);
   const [code, setCode] = useState('');
   const [claiming, setClaiming] = useState(false);
+  const [error, setError] = useState(false);
 
-  const load = () => activityApi.my().then(setActivities).catch(() => setActivities([]));
+  const load = () => { setError(false); activityApi.my().then(setActivities).catch(() => { setActivities([]); setError(true); }); };
   useEffect(() => {
     void load();
   }, []);
@@ -33,13 +34,14 @@ export default function MyActivities() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4">
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-2 flex items-center gap-2 text-base font-semibold">
-          <KeyRound className="h-5 w-5 text-blue-600" /> Klaim Token Kegiatan
+    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <PageHeader eyebrow="Area petugas" title="Kegiatan Saya" description="Klaim token dari admin untuk mulai mengerjakan proyek lapangan." />
+      <Panel className="p-5 sm:p-6">
+        <h2 className="mb-2 flex items-center gap-2 text-base font-semibold text-stone-900">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50"><KeyRound className="h-4 w-4 text-emerald-700" /></span> Klaim token kegiatan
         </h2>
-        <p className="mb-3 text-sm text-gray-500">Masukkan token 7 karakter yang diberikan admin.</p>
-        <form onSubmit={claim} className="flex gap-2">
+        <p className="mb-4 text-sm text-stone-500">Masukkan kode 7 karakter yang diberikan admin.</p>
+        <form onSubmit={claim} className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
@@ -48,16 +50,18 @@ export default function MyActivities() {
             className="font-mono uppercase tracking-widest"
             required
           />
-          <Button type="submit" disabled={claiming || code.length !== 7}>
+          <Button type="submit" className="sm:self-end" disabled={claiming || code.length !== 7}>
             {claiming ? 'Memproses...' : 'Klaim'}
           </Button>
         </form>
-      </section>
+      </Panel>
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-base font-semibold">Kegiatan Saya</h2>
+      <Panel className="p-5 sm:p-6">
+        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-stone-900"><CalendarCheck className="h-4 w-4 text-emerald-700" /> Riwayat kegiatan</h2>
         {activities === null ? (
           <LoadingState />
+        ) : error ? (
+          <ErrorState onRetry={load} />
         ) : activities.length === 0 ? (
           <EmptyState text="Belum ada kegiatan. Klaim token dulu." />
         ) : (
@@ -65,26 +69,20 @@ export default function MyActivities() {
             {activities.map((a) => {
               const expired = new Date(a.token_expires_at).getTime() < Date.now() || !a.token_is_active;
               return (
-                <li key={a.activity_id} className="flex items-center justify-between gap-2 py-3">
-                  <div>
-                    <p className="text-sm font-medium">{a.name}</p>
-                    <p className="text-xs text-gray-500">
+                <li key={a.activity_id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-stone-900">{a.name}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-stone-500">
                       Diklaim {formatDateTime(a.claimed_at)} · Token s.d. {formatDateTime(a.token_expires_at)}
                     </p>
                   </div>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      expired ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700'
-                    }`}
-                  >
-                    {expired ? 'Kedaluwarsa' : 'Aktif'}
-                  </span>
+                  <StatusBadge tone={expired ? 'neutral' : 'success'}>{expired ? 'Kedaluwarsa' : 'Aktif'}</StatusBadge>
                 </li>
               );
             })}
           </ul>
         )}
-      </section>
+      </Panel>
     </div>
   );
 }

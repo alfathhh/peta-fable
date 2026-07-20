@@ -213,12 +213,12 @@ export default function ProjectDetail() {
 
       {/* kontrol kanan */}
       <div className="absolute right-3 top-3 z-[1000] flex flex-col gap-2">
-        <div className="flex flex-col overflow-hidden rounded-lg bg-white shadow-md">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-md">
           {availableBasemaps().map((key) => (
             <button
               key={key}
               onClick={() => setBasemap(key)}
-              className={`px-3 py-2 text-xs font-medium ${basemap === key ? 'bg-blue-600 text-white' : 'hover:bg-gray-50'}`}
+              className={`min-h-10 px-3 text-xs font-semibold ${basemap === key ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-50'}`}
             >
               {BASEMAPS[key].label}
             </button>
@@ -259,10 +259,10 @@ export default function ProjectDetail() {
 
       {/* panel layer */}
       {panel === 'layers' && (
-        <div className="absolute inset-x-0 bottom-0 z-[1001] max-h-[70vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl sm:inset-x-auto sm:right-3 sm:top-16 sm:bottom-auto sm:w-96 sm:rounded-2xl">
+        <div className="absolute inset-x-0 bottom-0 z-[1001] max-h-[75vh] overflow-y-auto rounded-t-3xl border border-stone-200 bg-white/95 p-5 shadow-2xl backdrop-blur sm:inset-x-auto sm:right-3 sm:top-16 sm:bottom-auto sm:w-96 sm:rounded-3xl">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Layer Proyek</h2>
-            <button onClick={() => setPanel('none')} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+            <button onClick={() => setPanel('none')} className="flex h-10 w-10 items-center justify-center rounded-xl text-stone-400 hover:bg-stone-100 hover:text-stone-700">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -301,10 +301,10 @@ export default function ProjectDetail() {
 
       {/* panel infrastruktur saya */}
       {panel === 'infra' && (
-        <div className="absolute inset-x-0 bottom-0 z-[1001] max-h-[70vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl sm:inset-x-auto sm:right-3 sm:top-16 sm:bottom-auto sm:w-96 sm:rounded-2xl">
+        <div className="absolute inset-x-0 bottom-0 z-[1001] max-h-[75vh] overflow-y-auto rounded-t-3xl border border-stone-200 bg-white/95 p-5 shadow-2xl backdrop-blur sm:inset-x-auto sm:right-3 sm:top-16 sm:bottom-auto sm:w-96 sm:rounded-3xl">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Infrastruktur Saya</h2>
-            <button onClick={() => setPanel('none')} className="rounded p-1 text-gray-400 hover:bg-gray-100">
+            <button onClick={() => setPanel('none')} className="flex h-10 w-10 items-center justify-center rounded-xl text-stone-400 hover:bg-stone-100 hover:text-stone-700">
               <X className="h-4 w-4" />
             </button>
           </div>
