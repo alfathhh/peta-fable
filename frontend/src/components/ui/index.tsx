@@ -119,14 +119,16 @@ export function Modal({
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => {
     if (!open) return;
     previousFocus.current = document.activeElement as HTMLElement;
-    dialogRef.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    dialogRef.current?.querySelector<HTMLElement>('input, select, textarea')?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); previousFocus.current?.focus(); };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[1200] flex items-end justify-center bg-stone-950/45 backdrop-blur-[2px] sm:items-center sm:p-4">

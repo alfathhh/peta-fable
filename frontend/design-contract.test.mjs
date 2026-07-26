@@ -34,6 +34,8 @@ for (const primitive of ['PageHeader', 'TableShell', 'IconButton', 'StatusBadge'
 for (const dialogRule of ['role="dialog"', 'aria-modal="true"', "e.key === 'Escape'", 'aria-labelledby']) {
   assert.ok(sharedUi.includes(dialogRule), `dialog accessibility missing: ${dialogRule}`);
 }
+assert.ok(sharedUi.includes('}, [open]);'), 'modal focus must not be reset on every form render');
+assert.ok(sharedUi.includes("querySelector<HTMLElement>('input, select, textarea')"), 'modal must focus a form field before action buttons');
 const stylesheet = read('./src/index.css');
 for (const unsafeOverride of ['.bg-white {', '.shadow-sm {', '.shadow-md {']) {
   assert.ok(!stylesheet.includes(unsafeOverride), `global utility override remains: ${unsafeOverride}`);
